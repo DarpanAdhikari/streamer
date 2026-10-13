@@ -1,0 +1,44 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Single free web service:
+#   * one gevent/GEventWebSocketWorker process (in-memory room store must not
+#     be split across workers),
+#   * STUN-only ICE by default (add TURN_* later for strict-NAT viewers),
+#   * rooms kept in memory (ROOMS_FILE="" — the disk is ephemeral).
+#
+# Push this repo to GitHub, then: Render Dashboard → New → Blueprint → pick the
+# repo. Set the *sync: false* secrets (TURN_*, STUN_URL) in the dashboard.
+services:
+  - type: web
+    name: watch-together
+    runtime: python
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: pip install -r requirements.txt
+    startCommand: >-
+      gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker
+      -w 1 --timeout 120 -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: SOCKETIO_ASYNC_MODE
+        value: gevent
+      - key: ROOM_EXPIRY_HOURS
+        value: "24"
+      - key: ROOMS_FILE
+        value: ""
+      - key: STUN_URL
+        value: stun:stun.l.google.com:19302
+      - key: TURN_URL
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false

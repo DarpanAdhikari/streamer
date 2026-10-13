@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Watch Room · {{ room_id }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/player.css', v=ASSET_VERSION) }}">
+</head>
+<body class="room-body">
+    <div id="app" class="app">
+        <header class="topbar">
+            <div class="topbar-left">
+                <a class="brand" href="/">Watch&nbsp;Together</a>
+                <span class="room-chip">Room <b id="roomId">{{ room_id }}</b></span>
+                <span id="roleBadge" class="badge viewer">Viewer</span>
+                <span id="participantCount" class="muted">1 watching</span>
+            </div>
+            <div class="topbar-center">
+                <nav class="mode-tabs" role="tablist">
+                    <button id="tabWatch" class="mode-tab active" data-mode="media" role="tab">Watch</button>
+                    <button id="tabScreen" class="mode-tab" data-mode="screen" role="tab">Screen</button>
+                </nav>
+            </div>
+            <div class="topbar-right">
+                <button id="openVideoBtn" class="btn btn-primary" style="display:none;">Open video</button>
+                <button id="stopVideoBtn" class="btn" style="display:none;">Stop sharing</button>
+                <input type="file" id="videoFileInput" accept="video/*,.mp4,.m4v,.webm,.mkv,.mov,.avi,.ts,.mpg,.wmv,.flv,.ogg,.ogv,.m2ts,.mts" multiple hidden>
+                <button id="copyLinkBtn" class="btn" title="Copy link"><span class="btn-ico">🔗</span><span class="btn-label">Copy link</span></button>
+                <button id="sidebarToggle" class="btn icon-btn" title="Toggle panel" aria-label="Toggle panel">☰</button>
+            </div>
+        </header>
+
+        <main class="workspace">
+            <section class="stage">
+                <div id="watchView" class="view active">
+                    <div class="player-shell">
+                        <video id="stageVideo" playsinline preload="auto"></video>
+                        <button id="centerPlay" class="center-play hidden" title="Play/Pause">▶</button>
+
+                        <div id="emptyState" class="player-overlay">
+                            <div class="overlay-icon">▶</div>
+                            <p id="emptyStateText">No media selected yet</p>
+                            <button id="emptyAddMediaBtn" class="btn btn-primary" style="display:none;">Open video</button>
+                        </div>
+
+                        <div id="playerOverlay" class="player-overlay hidden">
+                            <div class="spinner"></div>
+                            <div id="playerOverlayText" class="overlay-text"></div>
+                        </div>
+
+                        <button id="clickToWatch" class="player-overlay click-to-watch hidden">Click to watch</button>
+
+                        <div id="subtitleOverlay" class="subtitle-overlay"></div>
+                        <div id="statsOverlay" class="stats-overlay hidden"></div>
+                    </div>
+
+                    <div class="control-bar">
+                            <div class="seek-row" id="seekRow">
+                                <div class="seek-track">
+                                    <div id="seekBuffered" class="seek-buffered"></div>
+                                    <div id="seekPlayed" class="seek-played"></div>
+                                    <input type="range" id="seekRange" class="seek-range" min="0" max="1000" value="0" step="1">
+                                </div>
+                            </div>
+                            <div class="controls-row">
+                                <button id="ctrlPlayPause" class="ctrl-btn" title="Play/Pause (Space)">▶</button>
+                                <button id="ctrlPrev" class="ctrl-btn" title="Previous">⏮</button>
+                                <button id="ctrlNext" class="ctrl-btn" title="Next">⏭</button>
+                                <div class="volume-control">
+                                    <button id="ctrlMute" class="ctrl-btn" title="Mute (M)">🔊</button>
+                                    <input type="range" id="ctrlVolume" class="volume-range" min="0" max="1" step="0.05" value="1">
+                                </div>
+                                <span class="time-display"><span id="ctrlCurrent">0:00</span> / <span id="ctrlDuration">0:00</span></span>
+                                <span class="spacer"></span>
+                                <button id="ctrlCc" class="ctrl-btn cc-btn hidden" title="Subtitles (C)">CC</button>
+                                <button id="ctrlPip" class="ctrl-btn" title="Picture in picture (P)">⧉</button>
+                                <button id="ctrlTheater" class="ctrl-btn" title="Theater mode (T)">▭</button>
+                                <button id="ctrlSnap" class="ctrl-btn" title="Screenshot (S)">📷</button>
+                                <button id="ctrlFullscreen" class="ctrl-btn" title="Fullscreen (F)">⛶</button>
+                                <button id="ctrlSettings" class="ctrl-btn" title="Settings" aria-expanded="false">⚙</button>
+                            </div>
+                            <div id="settingsMenu" class="settings-menu hidden">
+                                <div class="settings-item" id="speedSettingRow">
+                                    <span>Speed</span>
+                                    <select id="ctrlSpeed" class="ctrl-select" title="Playback speed">
+                                        <option value="0.5">0.5×</option>
+                                        <option value="0.75">0.75×</option>
+                                        <option value="1" selected>1×</option>
+                                        <option value="1.25">1.25×</option>
+                                        <option value="1.5">1.5×</option>
+                                        <option value="2">2×</option>
+                                    </select>
+                                </div>
+                                <div class="settings-item hidden" id="audioSettingRow">
+                                    <span>Audio</span>
+                                    <select id="audioTrack" class="ctrl-select" title="Audio track">
+                                        <option value="0">Default</option>
+                                    </select>
+                                </div>
+                                <div class="settings-item hidden" id="subtitleSettingRow">
+                                    <span>Subtitles</span>
+                                    <select id="subtitleTrack" class="ctrl-select" title="Subtitle track">
+                                        <option value="">None</option>
+                                    </select>
+                                </div>
+                                <div class="settings-item hidden" id="settingsCcRow">
+                                    <span>Show subtitles</span>
+                                    <input type="checkbox" id="settingsCc">
+                                </div>
+                                <div class="settings-item settings-slider" id="subDelayRow">
+                                    <span>Subtitle delay</span>
+                                    <input type="range" id="subDelay" min="-10" max="10" step="0.1" value="0">
+                                    <span class="slider-val" id="subDelayVal">0.0s</span>
+                                </div>
+                                <div class="settings-item settings-slider" id="subSizeRow">
+                                    <span>Subtitle size</span>
+                                    <input type="range" id="subSize" min="50" max="220" step="5" value="100">
+                                    <span class="slider-val" id="subSizeVal">100%</span>
+                                </div>
+                                <div class="settings-item" id="subLoadRow">
+                                    <span>Subtitle file</span>
+                                    <button id="loadSubtitleBtn" class="btn icon-btn">Load .srt/.vtt</button>
+                                    <input type="file" id="subtitleFileInput" accept=".srt,.vtt,text/plain" hidden>
+                                </div>
+                                <div class="settings-divider">Picture</div>
+                                <div class="settings-item settings-slider">
+                                    <span>Brightness</span>
+                                    <input type="range" id="picBrightness" min="50" max="150" step="1" value="100">
+                                    <span class="slider-val" id="picBrightnessVal">100%</span>
+                                </div>
+                                <div class="settings-item settings-slider">
+                                    <span>Contrast</span>
+                                    <input type="range" id="picContrast" min="50" max="150" step="1" value="100">
+                                    <span class="slider-val" id="picContrastVal">100%</span>
+                                </div>
+                                <div class="settings-item settings-slider">
+                                    <span>Saturation</span>
+                                    <input type="range" id="picSaturation" min="0" max="200" step="1" value="100">
+                                    <span class="slider-val" id="picSaturationVal">100%</span>
+                                </div>
+                                <div class="settings-item settings-slider">
+                                    <span>Hue</span>
+                                    <input type="range" id="picHue" min="-180" max="180" step="1" value="0">
+                                    <span class="slider-val" id="picHueVal">0°</span>
+                                </div>
+                                <div class="settings-item settings-slider">
+                                    <span>Zoom</span>
+                                    <input type="range" id="picZoom" min="100" max="300" step="1" value="100">
+                                    <span class="slider-val" id="picZoomVal">100%</span>
+                                </div>
+                                <div class="settings-item">
+                                    <span>Aspect</span>
+                                    <select id="picAspect" class="ctrl-select" title="Aspect ratio">
+                                        <option value="fit" selected>Fit</option>
+                                        <option value="fill">Fill</option>
+                                        <option value="16:9">16:9</option>
+                                        <option value="4:3">4:3</option>
+                                        <option value="1:1">1:1</option>
+                                    </select>
+                                </div>
+                                <div class="settings-item">
+                                    <span>Rotate / flip</span>
+                                    <div class="btn-row">
+                                        <button id="picRotateLeft" class="ctrl-btn" title="Rotate left">⟲</button>
+                                        <button id="picRotateRight" class="ctrl-btn" title="Rotate right">⟳</button>
+                                        <button id="picFlipH" class="ctrl-btn" title="Flip horizontal">⇋</button>
+                                        <button id="picReset" class="btn icon-btn" title="Reset picture">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="settings-item">
+                                    <span>Stats overlay</span>
+                                    <input type="checkbox" id="statsToggle">
+                                </div>
+                                <div class="settings-item settings-mobile-only">
+                                    <span>Volume</span>
+                                    <input type="range" id="settingsVolume" class="volume-range" min="0" max="1" step="0.05" value="1">
+                                </div>
+                            </div>
+                        </div>
+                    <div class="stage-meta">
+                        <span id="mediaTitle" class="media-title">No media selected</span>
+                        <span id="mediaTier" class="tier-chip hidden"></span>
+                        <span id="mediaStatus" class="status-chip hidden"></span>
+                    </div>
+                </div>
+
+                <div id="screenView" class="view">
+                    <div class="screen-shell">
+                        <video id="screenVideo" autoplay playsinline muted></video>
+                        <button id="screenClickToWatch" class="player-overlay click-to-watch hidden">Click to watch with sound</button>
+                        <div id="screenShareStatus" class="screen-status">Waiting for the host to share their screen…</div>
+                        <button id="screenStartBtn" class="btn btn-primary screen-start-btn" style="display:none;">Start screen share</button>
+                    </div>
+                </div>
+            </section>
+
+            <aside id="sidebar" class="sidebar">
+                <div class="panel">
+                    <div class="panel-head"><h3>Playlist</h3>
+                        <div class="panel-actions">
+                            <button id="prevBtn" class="btn icon-btn" title="Previous">⏮</button>
+                            <button id="nextBtn" class="btn icon-btn" title="Next">⏭</button>
+                        </div>
+                    </div>
+                    <div id="playlistItems" class="playlist"></div>
+                    <p id="noPlaylist" class="muted">No playlist items</p>
+                </div>
+
+                <div class="panel" id="hostControlsPanel" style="display:none;">
+                    <h3>Host playback</h3>
+                    <div id="hostControls" class="stack">
+                        <div class="row">
+                            <button id="playBtn" class="btn">Play</button>
+                            <button id="pauseBtn" class="btn">Pause</button>
+                        </div>
+                        <div class="row">
+                            <input type="number" id="seekInput" placeholder="Seconds" class="input-small">
+                            <button id="seekBtn" class="btn">Seek</button>
+                        </div>
+                        <div class="row">
+                            <button id="syncBtn" class="btn">Force sync</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" id="viewerControlsPanel" style="display:none;">
+                    <h3>Viewer controls</h3>
+                    <div id="viewerControls" class="stack">
+                        <div class="row">
+                            <button id="viewerPlayBtn" class="btn">Play</button>
+                            <button id="viewerPauseBtn" class="btn">Pause</button>
+                        </div>
+                        <div class="row viewer-seek-control">
+                            <input type="number" id="viewerSeekInput" placeholder="Seconds" class="input-small">
+                            <button id="viewerSeekBtn" class="btn">Seek</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel" id="screenPanel">
+                    <h3>Screen sharing</h3>
+                    <div id="ssHostControls" class="stack" style="display:none;">
+                        <button id="startShareBtn" class="btn btn-primary">Start screen share</button>
+                        <button id="stopShareBtn" class="btn" style="display:none;">Stop sharing</button>
+                    </div>
+                    <p id="ssStatusText" class="muted">Not sharing</p>
+                </div>
+
+                <div class="panel" id="permissionsPanel" style="display:none;">
+                    <h3>Viewer permissions</h3>
+                    <div class="stack">
+                        <label class="check muted"><input type="checkbox" id="permControl"> Allow viewers to play/pause</label>
+                        <label class="check muted"><input type="checkbox" id="permSeek"> Allow viewers to seek</label>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "mediabunny": "{{ url_for('static', filename='js/vendor/mediabunny.mjs', v=ASSET_VERSION) }}",
+            "hls.js/light": "{{ url_for('static', filename='js/vendor/hls.light.min.mjs', v=ASSET_VERSION) }}"
+        }
+    }
+    </script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/room.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/player.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/synchronization.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/subtitles.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/broadcast.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/picture.js', v=ASSET_VERSION) }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/media-local.js', v=ASSET_VERSION) }}"></script>
+</body>
+</html>

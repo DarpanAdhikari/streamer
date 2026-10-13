@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Keep tests hermetic: in-memory rooms, no debug reloader.
+      ROOMS_FILE: ${{ runner.temp }}/rooms.json
+      FLASK_DEBUG: "False"
+      SOCKETIO_ASYNC_MODE: eventlet
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Byte-compile Python
+        run: python -m compileall -q app app.py
+
+      - name: Syntax-check JavaScript
+        run: |
+          for f in static/js/*.js; do node --check "$f"; done
+
+      - name: Run tests
+        run: python -m pytest -q
