@@ -35,8 +35,11 @@ jobs:
       - name: Verify WSGI entrypoint
         run: python -c "import wsgi; assert wsgi.app is not None; print('wsgi:app OK')"
 
+      - name: Verify gunicorn app:app target
+        run: python -c "import app; assert callable(app.app); print('app:app OK')"
+
       - name: Byte-compile Python
-        run: python -m compileall -q app app.py
+        run: python -m compileall -q app app.py wsgi.py gunicorn.conf.py
 
       - name: Syntax-check JavaScript
         run: |

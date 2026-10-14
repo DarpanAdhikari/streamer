@@ -62,3 +62,15 @@ def create_app(config_class=None):
                       cors_allowed_origins="*")
 
     return app
+
+
+def __getattr__(name):
+    """Expose ``app`` for gunicorn's ``app:app`` target.
+
+    The repo root contains both ``app.py`` and this ``app`` package; the package
+    shadows the module, so gunicorn's ``getattr(import_module('app'), 'app')``
+    would otherwise fail. Resolved lazily to avoid import-time side effects.
+    """
+    if name == 'app':
+        return create_app()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

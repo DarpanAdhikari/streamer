@@ -134,13 +134,14 @@ memory), and only a single instance runs — matching the single-worker
 requirement. CI (`.github/workflows/ci.yml`) runs on every push; `render.yaml`
 deploys only after those checks pass (`autoDeployTrigger: checksPass`).
 
-> **Important:** the service must be created via **New → Blueprint** (or have its
-> Start Command set explicitly in the dashboard). A service created manually as a
-> plain Web Service is *not* managed by `render.yaml`, so Render falls back to its
-> default `gunicorn app:app` — which uses the `sync` worker and fails to import
-> (the `app/` package shadows `app.py`). A root `Procfile` provides the correct
-> `wsgi:app` + gevent start command for services whose Start Command field is
-> left blank.
+> **Start command:** Render services created manually as a plain Web Service are
+> *not* managed by `render.yaml`, so Render falls back to its default
+> `gunicorn app:app`. That works even so: gunicorn auto-loads the repo-root
+> `gunicorn.conf.py`, which selects the gevent WebSocket worker (one worker, so
+> the in-memory room store is shared) and sets `SOCKETIO_ASYNC_MODE=gevent`,
+> `FLASK_DEBUG=False`, and `ROOMS_FILE=""`. The `app/` package exposes an `app`
+> attribute for the `app:app` target, and `wsgi.py` (`wsgi:app` via `render.yaml`
+> or `Procfile`) is the Blueprint/Procfile equivalent.
 
 ## Scaling note
 
