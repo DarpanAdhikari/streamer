@@ -32,6 +32,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Verify WSGI entrypoint
+        run: python -c "import wsgi; assert wsgi.app is not None; print('wsgi:app OK')"
+
       - name: Byte-compile Python
         run: python -m compileall -q app app.py
 

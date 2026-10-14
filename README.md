@@ -107,7 +107,7 @@ hardening (rate limit, expiry), and reconnect state.
 
   ```bash
   gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker \
-           -w 1 -b 0.0.0.0:5000 app:app
+           -w 1 -b 0.0.0.0:5000 wsgi:app
   ```
 
 - Reverse proxies must forward WebSocket upgrades.
