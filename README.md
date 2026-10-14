@@ -8,6 +8,10 @@ sync. Nothing is uploaded, and the server never sees the video.
 
 Built for small groups, roughly two to ten people, and no accounts are needed.
 
+> **Try the live demo:** [**streamer-m26o.onrender.com**](https://streamer-m26o.onrender.com/)
+> Create a room, send the link to a friend, and watch together. The free instance
+> sleeps when idle, so the first visit can take a minute to wake.
+
 ## Why it exists
 
 Watching a movie with friends over the internet usually means one of two things.
@@ -74,6 +78,15 @@ between browsers.
 - Timestamps, join and leave notices, and a clear button for the host. Messages
   live in memory for the length of the session.
 
+**Audio call**
+- The host can start a room-wide voice call. Everyone else gets an invite to
+  accept or decline, and anyone can join or rejoin while the call is live.
+- It is a peer-to-peer mesh, so no audio passes through the server. If the host
+  hangs up or drops out, the call keeps going for everyone still on it, until the
+  last person leaves.
+- Mute yourself from the call panel; only the host can end the call for everyone.
+- Needs microphone permission, and a headset avoids echo on laptop speakers.
+
 **Permissions**
 - The host can allow viewers to play/pause and to seek.
 
@@ -95,6 +108,21 @@ between browsers.
 1. Open the link the host sent you.
 2. The video appears as the host plays it and stays in sync. Volume and fullscreen
    are always yours. If the host has allowed it, you also get play/pause and seek.
+
+### Start an audio call (host)
+
+1. Click **Start call** in the top bar and allow microphone access.
+2. Everyone else sees an invite to accept or decline. Anyone can join later with
+   the **Join call** button while the call is live.
+3. Use **Mute** and **Leave** in the call panel. The host also has **End for all**.
+   If the host leaves, the call continues for everyone else until the last person
+   hangs up.
+
+### Join an audio call (viewer)
+
+1. Accept the invite, or click **Join call** while a call is active.
+2. Mute or leave from the call panel. If your connection drops, you are prompted to
+   rejoin.
 
 ### Before you start
 
@@ -131,7 +159,8 @@ pinch to zoom, and press and hold for 2x speed.
 
 **Server.** Flask with Flask-SocketIO. It creates rooms, issues host tokens, tracks
 participants, relays WebRTC offers, answers, and ICE candidates, and holds the
-shared state for playback, the playlist, subtitles, and chat. It stores no video.
+shared state for playback, the playlist, subtitles, chat, and audio-call
+membership. It stores no video.
 
 **Host browser.** The file is decoded in tiers, from cheapest to most work:
 
@@ -150,6 +179,11 @@ into the video.
 
 **Viewer browser.** Attaches the incoming `MediaStream` to a plain `<video>`
 element and receives state updates over Socket.IO.
+
+**Audio call.** A separate peer-to-peer mesh over microphone tracks. The server
+only tracks who is in the call and relays SDP and ICE, so a call outlives the host:
+it ends only when the last participant leaves, the host ends it for everyone, or
+the room expires.
 
 ## Run it locally
 
@@ -224,7 +258,7 @@ python -m pytest tests/ -q
 ```
 
 The suite covers room lifecycle and auth, playlist signaling, permissions, sync,
-screen sharing, chat, rate limiting, expiry, and reconnect state.
+screen sharing, chat, audio calls, rate limiting, expiry, and reconnect state.
 
 ## Known limitations
 
@@ -234,6 +268,8 @@ screen sharing, chat, rate limiting, expiry, and reconnect state.
 - The WebRTC mesh sends one stream per viewer, which suits small rooms. Larger rooms
   need an SFU, which could replace `app/sockets/screen_share.py` and
   `static/js/broadcast.js` without changing the room and state layer.
+- The audio call is also a full mesh, so each participant uploads one stream per
+  peer. It is comfortable for small groups and needs an SFU beyond that.
 - The room store and rate limiter are in-process, so the app runs as a single
   worker.
 - Subtitle timing for viewers is estimated from the shared playback position.

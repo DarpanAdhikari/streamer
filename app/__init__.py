@@ -55,10 +55,12 @@ def create_app(config_class=None):
     from .sockets.playback import register_playback_events
     from .sockets.screen_share import register_screen_share_events
     from .sockets.chat import register_chat_events
+    from .sockets.audio_call import register_audio_call_events
     register_rooms_events(socketio)
     register_playback_events(socketio)
     register_screen_share_events(socketio)
     register_chat_events(socketio)
+    register_audio_call_events(socketio)
 
     socketio.init_app(app, async_mode=os.environ.get('SOCKETIO_ASYNC_MODE', 'eventlet'),
                       cors_allowed_origins="*")

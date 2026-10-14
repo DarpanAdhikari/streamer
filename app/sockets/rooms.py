@@ -1,7 +1,7 @@
 from flask_socketio import emit, join_room, leave_room
 from flask import request
 from ..services import room_service
-from . import registry, chat
+from . import registry, chat, audio_call
 
 socketio = None
 
@@ -46,6 +46,7 @@ def register_rooms_events(sio):
             'subtitles': room.get('subtitles', {'cues': [], 'delay': 0}),
             'picture': room.get('picture', room_service.DEFAULT_PICTURE),
             'chat': room.get('chat', []),
+            'audio_call': audio_call.state_payload(room),
             'participant_count': len(participants)
         })
         sio.emit('participants_update', {'count': len(participants)}, to=room_id)
@@ -65,6 +66,8 @@ def register_rooms_events(sio):
             return
         room_id = info['room_id']
         _cleanup_participant(sid, room_id, info.get('name'))
+        # A dropped connection leaves the audio call; others keep talking.
+        audio_call.handle_disconnect(room_id, sid)
         room = room_service.get_room(room_id)
         if not room:
             return

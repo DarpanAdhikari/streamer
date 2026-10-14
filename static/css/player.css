@@ -876,3 +876,46 @@ body.theater .control-bar {
         z-index: 15;
     }
 }
+
+/* ---------- Audio call ---------- */
+.call-btn.in-call {
+    border-color: #22c55e;
+    color: #86efac;
+}
+
+.ac-audio { display: none; }
+
+.call-timer {
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    margin-left: 6px;
+}
+
+.call-participants {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.call-participant {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 9px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.02);
+    font-size: 0.9rem;
+}
+
+.call-participant.me { border-color: var(--indigo); }
+
+.call-participant .call-mic { width: 1.1em; text-align: center; }
+.call-participant .call-mic.muted { opacity: 0.55; }
+.call-participant .call-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+

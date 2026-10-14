@@ -26,6 +26,7 @@
                 <button id="stopVideoBtn" class="btn" style="display:none;">Stop sharing</button>
                 <input type="file" id="videoFileInput" accept="video/*,.mp4,.m4v,.webm,.mkv,.mov,.avi,.ts,.mpg,.wmv,.flv,.ogg,.ogv,.m2ts,.mts" multiple hidden>
                 <button id="copyLinkBtn" class="btn" title="Copy link"><span class="btn-ico">🔗</span><span class="btn-label">Copy link</span></button>
+                <button id="callBtn" class="btn call-btn" title="Audio call" style="display:none;"><span class="btn-ico">📞</span><span id="callBtnLabel">Start call</span></button>
                 <button id="sidebarToggle" class="btn icon-btn" title="Toggle panel" aria-label="Toggle panel">☰<span id="chatUnread" class="chat-unread-badge hidden">0</span></button>
             </div>
         </header>
@@ -226,6 +227,18 @@
                     </div>
                 </div>
 
+                <div class="panel" id="callPanel" style="display:none;">
+                    <div class="panel-head">
+                        <h3>Audio call <span id="callTimer" class="call-timer muted"></span></h3>
+                    </div>
+                    <div id="callParticipants" class="call-participants" aria-live="polite"></div>
+                    <div class="row">
+                        <button id="callMuteBtn" class="btn">Mute</button>
+                        <button id="callLeaveBtn" class="btn">Leave</button>
+                        <button id="callEndBtn" class="btn" style="display:none;">End for all</button>
+                    </div>
+                </div>
+
                 <div class="panel" id="hostControlsPanel" style="display:none;">
                     <h3>Host playback</h3>
                     <div id="hostControls" class="stack">
@@ -280,6 +293,17 @@
     <div id="sidebarBackdrop" class="sidebar-backdrop"></div>
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
+    <div id="callInviteModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="callInviteTitle">
+        <div class="modal-card">
+            <div class="modal-head"><h3 id="callInviteTitle">Incoming audio call</h3></div>
+            <p id="callInviteText" class="muted">Someone started an audio call.</p>
+            <div class="modal-actions">
+                <button id="callDeclineBtn" class="btn">Decline</button>
+                <button id="callAcceptBtn" class="btn btn-primary">Accept</button>
+            </div>
+        </div>
+    </div>
+
     <script type="importmap">
     {
         "imports": {
@@ -290,6 +314,7 @@
     </script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/chat.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/audio-call.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/room.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/player.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/synchronization.js', v=ASSET_VERSION) }}"></script>
