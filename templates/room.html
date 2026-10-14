@@ -196,6 +196,13 @@
             </section>
 
             <aside id="sidebar" class="sidebar">
+                <div class="panel" id="rosterPanel">
+                    <div class="panel-head">
+                        <h3>People <span id="rosterCount" class="muted">0</span></h3>
+                    </div>
+                    <div id="rosterList" class="roster" aria-live="polite"></div>
+                </div>
+
                 <div class="panel">
                     <div class="panel-head"><h3>Playlist</h3>
                         <div class="panel-actions">
@@ -220,10 +227,13 @@
                                placeholder="Say something…" aria-label="Chat message">
                         <button id="chatSendBtn" class="btn btn-primary" type="submit">Send</button>
                     </form>
-                    <div class="chat-name-row">
-                        <input id="chatName" class="input-small chat-name-input" type="text" maxlength="32"
-                               placeholder="Your name" aria-label="Your display name">
+                    <div class="chat-input-meta">
                         <span id="chatCounter" class="chat-counter muted">0/500</span>
+                    </div>
+                    <div class="chat-name-row">
+                        <input id="chatName" class="input-small chat-name-input" type="text" maxlength="16"
+                               placeholder="Your name" aria-label="Custom display name">
+                        <span id="chatNameBase" class="chat-name-base muted"></span>
                     </div>
                 </div>
 
@@ -314,6 +324,7 @@
     </script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
     <script src="{{ url_for('static', filename='js/chat.js', v=ASSET_VERSION) }}"></script>
+    <script src="{{ url_for('static', filename='js/roster.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/audio-call.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/room.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/player.js', v=ASSET_VERSION) }}"></script>

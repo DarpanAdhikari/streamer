@@ -15,9 +15,15 @@ def register_rooms_events(sio):
         room_id = data.get('room_id')
         token = data.get('token')
         name = data.get('name')
+        client_id = data.get('client_id')
         room = room_service.get_room(room_id)
         if not room:
             emit('error', {'message': 'Room not found'})
+            return
+        # A viewer removed by the host (tracked by browser client id) cannot
+        # rejoin this room for as long as it exists.
+        if client_id and client_id in (room.get('banned') or {}):
+            emit('kicked', {'reason': 'You were removed from this room by the host'})
             return
         wants_host = room_service.is_host(room_id, token)
         participants = room.setdefault('participants', {})
@@ -28,7 +34,7 @@ def register_rooms_events(sio):
             room['host_sid'] = request.sid
 
         join_room(room_id)
-        registry.set_sid(request.sid, room_id, is_host, name)
+        registry.set_sid(request.sid, room_id, is_host, name, client_id)
 
         participants[request.sid] = {'is_host': is_host}
         room_service.update_room(room_id, {'participants': participants, 'host_sid': room.get('host_sid')})
@@ -47,9 +53,10 @@ def register_rooms_events(sio):
             'picture': room.get('picture', room_service.DEFAULT_PICTURE),
             'chat': room.get('chat', []),
             'audio_call': audio_call.state_payload(room),
+            'participants': roster(room_id),
             'participant_count': len(participants)
         })
-        sio.emit('participants_update', {'count': len(participants)}, to=room_id)
+        sio.emit('participants_update', roster_payload(room_id), to=room_id)
         chat.notify_system(room_id, '{name} joined', name)
 
     @sio.on('leave')
@@ -101,5 +108,25 @@ def _cleanup_participant(sid, room_id, name=None):
         del participants[sid]
         room_service.update_room(room_id, {'participants': participants})
         if socketio:
-            socketio.emit('participants_update', {'count': len(participants)}, to=room_id)
+            socketio.emit('participants_update', roster_payload(room_id), to=room_id)
         chat.notify_system(room_id, '{name} left', name)
+
+
+def roster(room_id):
+    """Public list of the room's participants, including display names."""
+    room = room_service.get_room(room_id)
+    if not room:
+        return []
+    return [
+        {
+            'sid': sid,
+            'name': registry.get_name(sid),
+            'is_host': bool(p.get('is_host')),
+        }
+        for sid, p in room.get('participants', {}).items()
+    ]
+
+
+def roster_payload(room_id):
+    participants = roster(room_id)
+    return {'count': len(participants), 'participants': participants}

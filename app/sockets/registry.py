@@ -9,9 +9,14 @@ _LOCK = threading.Lock()
 _SID_INFO = {}
 
 
-def set_sid(sid, room_id, is_host=False, name=None):
+def set_sid(sid, room_id, is_host=False, name=None, client_id=None):
     with _LOCK:
-        _SID_INFO[sid] = {'room_id': room_id, 'is_host': is_host, 'name': name}
+        _SID_INFO[sid] = {
+            'room_id': room_id,
+            'is_host': is_host,
+            'name': name,
+            'client_id': client_id,
+        }
 
 
 def remove_sid(sid):
@@ -27,6 +32,11 @@ def get_sid_info(sid):
 def get_name(sid):
     info = get_sid_info(sid)
     return info.get('name') if info else None
+
+
+def get_client_id(sid):
+    info = get_sid_info(sid)
+    return info.get('client_id') if info else None
 
 
 def get_room_id(sid):

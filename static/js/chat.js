@@ -5,16 +5,15 @@
  * renderChatHistory) are available globally by the time room.js connects.
  * Message bodies are rendered with textContent only, so they are XSS-safe.
  */
-let chatName = '';
+let chatBase = '';
+let chatCustom = '';
 let chatAtBottom = true;
 let chatUnread = 0;
 let chatHistoryLoaded = false;
 const CHAT_DOM_LIMIT = 200;
-
-function chatRoomId() {
-    const el = document.getElementById('roomId');
-    return el ? el.textContent.trim() : '';
-}
+const CHAT_NAME_KEY = 'wt_chat_name';
+const CHAT_CUSTOM_MAX = 16;
+const CHAT_NAME_MAX = 32;
 
 function deriveDefaultName() {
     let browser = '';
@@ -46,7 +45,13 @@ function deriveDefaultName() {
 }
 
 function getChatName() {
-    return chatName;
+    const name = chatCustom ? (chatCustom + ' (' + chatBase + ')') : chatBase;
+    return name.slice(0, CHAT_NAME_MAX);
+}
+
+function renderNameBase() {
+    const baseEl = document.getElementById('chatNameBase');
+    if (baseEl) baseEl.textContent = chatCustom ? '(' + chatBase + ')' : chatBase;
 }
 
 function formatChatTime(ts) {
@@ -170,17 +175,21 @@ function initChatSocket() {
 }
 
 function initChat() {
-    const stored = sessionStorage.getItem('chat_name_' + chatRoomId());
-    chatName = stored || deriveDefaultName();
+    chatBase = deriveDefaultName();
+    let stored = '';
+    try { stored = localStorage.getItem(CHAT_NAME_KEY) || ''; } catch (e) { stored = ''; }
+    chatCustom = stored.trim().slice(0, CHAT_CUSTOM_MAX);
 
     const nameInput = document.getElementById('chatName');
     if (nameInput) {
-        nameInput.value = chatName;
+        nameInput.value = chatCustom;
         nameInput.addEventListener('input', function () {
-            chatName = nameInput.value.trim().slice(0, 32);
-            sessionStorage.setItem('chat_name_' + chatRoomId(), chatName);
+            chatCustom = nameInput.value.trim().slice(0, CHAT_CUSTOM_MAX);
+            try { localStorage.setItem(CHAT_NAME_KEY, chatCustom); } catch (e) { /* ignore */ }
+            renderNameBase();
         });
     }
+    renderNameBase();
 
     const form = document.getElementById('chatForm');
     if (form) form.addEventListener('submit', function (e) { e.preventDefault(); sendChat(); });

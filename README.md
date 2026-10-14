@@ -75,8 +75,10 @@ between browsers.
   machine.
 
 **Chat**
-- In-room text chat. Your display name is guessed from your browser and operating
-  system, for example "Chrome on Linux", and you can change it.
+- In-room text chat. Your name's browser and OS part (for example "Chrome · Linux")
+  is fixed; you can add your own custom name in front of it, so you appear as
+  "Alice (Chrome · Linux)". Your custom name is remembered across rooms in this
+  browser.
 - Timestamps, join and leave notices, and a clear button for the host. Messages
   live in memory for the length of the session.
 
@@ -88,6 +90,11 @@ between browsers.
   last person leaves.
 - Mute yourself from the call panel; only the host can end the call for everyone.
 - Needs microphone permission, and a headset avoids echo on laptop speakers.
+
+**Host moderation**
+- A **People** panel lists everyone in the room. The host can remove a viewer with
+  the ✕ button. The removed viewer sees a notice and is returned to the home page,
+  and cannot rejoin that room for as long as it exists.
 
 **Permissions**
 - The host can allow viewers to play/pause and to seek.
@@ -125,6 +132,13 @@ between browsers.
 1. Accept the invite, or click **Join call** while a call is active.
 2. Mute or leave from the call panel. If your connection drops, you are prompted to
    rejoin.
+
+### Remove a viewer (host)
+
+1. In the **People** panel, click **✕** next to a viewer to remove them from the
+   room. They see a short notice and are returned to the home page.
+2. Removal is remembered for the room's lifetime, so the same browser cannot rejoin
+   that room.
 
 ### Before you start
 
@@ -186,6 +200,11 @@ element and receives state updates over Socket.IO.
 only tracks who is in the call and relays SDP and ICE, so a call outlives the host:
 it ends only when the last participant leaves, the host ends it for everyone, or
 the room expires.
+
+**Moderation.** The server relays a room roster (names and host flag) so the People
+panel is the same for everyone. When the host removes a viewer, the server records
+that browser's client id for the room's lifetime, then disconnects them; a later join
+with the same client id is refused.
 
 ## Run it locally
 
@@ -267,7 +286,8 @@ python -m pytest tests/ -q
 ```
 
 The suite covers room lifecycle and auth, playlist signaling, permissions, sync,
-screen sharing, chat, audio calls, rate limiting, expiry, and reconnect state.
+screen sharing, chat, audio calls, host moderation, rate limiting, expiry, and
+reconnect state.
 
 ## Known limitations
 
@@ -284,4 +304,7 @@ screen sharing, chat, audio calls, rate limiting, expiry, and reconnect state.
 - Rooms live in memory. On an ephemeral host such as the free Render tier they do
   not survive a restart or an idle sleep, so shared links expire with them. Persist
   the room store (for example in Redis) if links need to outlive restarts.
+- A kicked viewer is blocked by a browser-local client id, not an IP. Clearing the
+  site's data or using a private window lets them back in; the block is a deterrent,
+  not airtight.
 - Subtitle timing for viewers is estimated from the shared playback position.

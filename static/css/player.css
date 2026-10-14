@@ -555,9 +555,30 @@ body.room-body {
 }
 .chat-form { display: flex; gap: 6px; }
 .chat-input { flex: 1; }
-.chat-name-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.chat-name-input { flex: 1; width: auto; }
+.chat-input-meta { display: flex; justify-content: flex-end; margin-top: 4px; }
+.chat-name-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; overflow: hidden; }
+.chat-name-input { flex: 1; width: auto; min-width: 0; }
+.chat-name-base {
+    font-size: 0.76rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 55%;
+}
 .chat-counter { font-size: 0.72rem; white-space: nowrap; }
+.roster { display: flex; flex-direction: column; gap: 2px; }
+.roster-item { display: flex; align-items: center; gap: 8px; padding: 4px 2px; }
+.roster-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.roster-badge {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.18);
+}
+.roster-badge.host { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
+.roster-kick { color: var(--red); }
 .chat-unread-badge {
     position: absolute;
     top: -6px;

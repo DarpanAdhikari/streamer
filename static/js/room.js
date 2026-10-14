@@ -269,13 +269,14 @@ function initializeSocket() {
         reconnectionDelayMax: 5000,
         timeout: 20000
     });
-    socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName() });
+    socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName(), client_id: getClientId() });
     if (typeof initChatSocket === 'function') initChatSocket();
     if (typeof initAudioCallSocket === 'function') initAudioCallSocket();
+    if (typeof initRosterSocket === 'function') initRosterSocket();
 
     socket.on('connect', function () { reconnectAttempts = 0; hostClaimRetried = false; });
     socket.on('reconnect', function () {
-        socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName() });
+        socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName(), client_id: getClientId() });
         socket.emit('sync_request', { room_id: roomId });
     });
 
@@ -284,12 +285,13 @@ function initializeSocket() {
         if (typeof refreshChatHostUi === 'function') refreshChatHostUi();
         if (typeof loadChatHistory === 'function') loadChatHistory(data.chat);
         if (typeof loadAudioCallState === 'function') loadAudioCallState(data.audio_call);
+        if (typeof loadRoster === 'function') loadRoster(data.participants);
         // A host token holder demoted to viewer is usually a stale socket during a
         // refresh; retry once so the refreshed host reclaims the role.
         if (!data.is_host && hostToken && !hostClaimRetried) {
             hostClaimRetried = true;
             setTimeout(function () {
-                if (socket) socket.emit('join', { room_id: roomId, token: hostToken });
+                if (socket) socket.emit('join', { room_id: roomId, token: hostToken, client_id: getClientId() });
             }, 1500);
         }
         document.getElementById('participantCount').textContent = (data.participant_count || 1) + ' watching';
@@ -334,6 +336,7 @@ function initializeSocket() {
 
     socket.on('participants_update', function (data) {
         document.getElementById('participantCount').textContent = data.count + ' watching';
+        if (typeof renderRoster === 'function') renderRoster(data.participants);
     });
 
     socket.on('error', function (data) { console.error(data.message); });

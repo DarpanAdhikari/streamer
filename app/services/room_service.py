@@ -78,6 +78,9 @@ def create_room(password=None):
             'screen_share': {'active': False, 'host_sid': None, 'source': None},
             'subtitles': {'cues': [], 'delay': 0},
             'chat': [],
+            # Client ids (browser-local) of viewers the host has removed. A kicked
+            # client cannot rejoin this room for as long as it exists.
+            'banned': {},
             'audio_call': {'active': False, 'started_by': None, 'started_at': None, 'participants': {}},
             'picture': dict(DEFAULT_PICTURE),
             'playback_state': {
