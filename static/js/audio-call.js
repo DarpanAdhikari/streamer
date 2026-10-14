@@ -15,6 +15,17 @@ let acWasInCall = false;
 let acMuted = false;
 let acTimer = null;
 let acRejoinPrompted = false;
+let acLocalMuted = {};        // sid -> bool (mute that peer for me only)
+let acAudioCtx = null;        // shared AudioContext for voice detection
+let acSpeakAnalyzers = {};    // key (sid or AC_LOCAL_KEY) -> { src, analyser, data }
+let acSpeakOn = {};           // key -> bool (currently talking)
+let acSpeakTicks = {};        // key -> consecutive loud samples
+let acSpeakLast = {};         // key -> timestamp of last loud sample
+let acSpeakTimer = null;
+const AC_LOCAL_KEY = '__local';
+const AC_SPEAK_THRESHOLD = 0.045;
+const AC_SPEAK_TICKS_ON = 2;
+const AC_SPEAK_HOLD_MS = 500;
 
 /* --------------------------------- state ---------------------------------- */
 
@@ -98,6 +109,7 @@ function acRenderParticipants() {
     acState.participants.forEach(function (p) {
         const row = document.createElement('div');
         row.className = 'call-participant' + (p.sid === me ? ' me' : '');
+        if (p.sid) row.dataset.sid = p.sid;
 
         const mic = document.createElement('span');
         mic.className = 'call-mic' + (p.muted ? ' muted' : '');
@@ -107,10 +119,28 @@ function acRenderParticipants() {
         name.className = 'call-name';
         name.textContent = (p.name || 'Guest') + (p.sid === me ? ' (you)' : '');
 
+        const bars = document.createElement('span');
+        bars.className = 'talk-bars';
+        for (let i = 0; i < 3; i++) bars.appendChild(document.createElement('span'));
+
         row.appendChild(mic);
         row.appendChild(name);
+        row.appendChild(bars);
+
+        if (p.sid && p.sid !== me) {
+            const muted = !!acLocalMuted[p.sid];
+            const muteBtn = document.createElement('button');
+            muteBtn.type = 'button';
+            muteBtn.className = 'btn icon-btn call-mute-btn' + (muted ? ' active' : '');
+            muteBtn.title = muted ? 'Unmute for me' : 'Mute for me';
+            muteBtn.textContent = muted ? '🔇' : '🔊';
+            muteBtn.addEventListener('click', function () { acToggleLocalMute(p.sid); });
+            row.appendChild(muteBtn);
+        }
+
         box.appendChild(row);
     });
+    acRefreshTalking();
 }
 
 function acUpdateUI() {
@@ -138,6 +168,9 @@ function acUpdateUI() {
 
     acRenderParticipants();
 
+    if (acInCall) acStartTalking();
+    else acStopTalking();
+
     if (acInCall && acState.active) acStartTimer();
     else { acStopTimer(); acUpdateTimer(); }
 }
@@ -153,6 +186,7 @@ async function acEnsureStream() {
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     acLocalStream.getAudioTracks().forEach(function (t) { t.enabled = !acMuted; });
+    acAddAnalyzer(AC_LOCAL_KEY, acLocalStream);
     return acLocalStream;
 }
 
@@ -168,6 +202,8 @@ function acAttachRemote(sid, stream) {
         acAudioEls[sid] = el;
     }
     el.srcObject = stream;
+    el.muted = !!acLocalMuted[sid];
+    acAddAnalyzer(sid, stream);
     el.play().catch(function () {});
 }
 
@@ -200,10 +236,118 @@ function acRemovePeer(sid) {
         if (el.parentNode) el.parentNode.removeChild(el);
         delete acAudioEls[sid];
     }
+    acRemoveAnalyzer(sid);
 }
 
 function acTeardownPeers() {
     Object.keys(acPeers).forEach(acRemovePeer);
+}
+
+/* --------------------------- local mute + talking -------------------------- */
+
+function acEnsureAudioCtx() {
+    if (acAudioCtx) {
+        if (acAudioCtx.state === 'suspended') acAudioCtx.resume().catch(function () {});
+        return acAudioCtx;
+    }
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return null;
+    try { acAudioCtx = new Ctx(); } catch (e) { acAudioCtx = null; }
+    return acAudioCtx;
+}
+
+function acAddAnalyzer(key, stream) {
+    const ctx = acEnsureAudioCtx();
+    if (!ctx || !stream) return;
+    acRemoveAnalyzer(key);
+    try {
+        const src = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = 0.6;
+        src.connect(analyser);
+        acSpeakAnalyzers[key] = { src: src, analyser: analyser, data: new Uint8Array(analyser.fftSize) };
+    } catch (e) { /* ignore */ }
+}
+
+function acRemoveAnalyzer(key) {
+    const entry = acSpeakAnalyzers[key];
+    if (!entry) return;
+    try { entry.src.disconnect(); } catch (e) { /* ignore */ }
+    delete acSpeakAnalyzers[key];
+    delete acSpeakOn[key];
+    delete acSpeakTicks[key];
+    delete acSpeakLast[key];
+}
+
+function acRowFor(sid) {
+    const rows = document.querySelectorAll('.call-participant');
+    for (let i = 0; i < rows.length; i++) {
+        if (rows[i].dataset.sid === sid) return rows[i];
+    }
+    return null;
+}
+
+function acApplyTalking(key) {
+    const sid = key === AC_LOCAL_KEY ? acMe() : key;
+    if (!sid) return;
+    const row = acRowFor(sid);
+    if (row) row.classList.toggle('talking', !!acSpeakOn[key]);
+}
+
+function acRefreshTalking() {
+    Object.keys(acSpeakOn).forEach(acApplyTalking);
+}
+
+function acSampleTalking() {
+    const now = Date.now();
+    Object.keys(acSpeakAnalyzers).forEach(function (key) {
+        const entry = acSpeakAnalyzers[key];
+        entry.analyser.getByteTimeDomainData(entry.data);
+        let sum = 0;
+        for (let i = 0; i < entry.data.length; i++) {
+            const v = (entry.data[i] - 128) / 128;
+            sum += v * v;
+        }
+        const rms = Math.sqrt(sum / entry.data.length);
+        if (rms > AC_SPEAK_THRESHOLD) {
+            acSpeakTicks[key] = (acSpeakTicks[key] || 0) + 1;
+            acSpeakLast[key] = now;
+            if (acSpeakTicks[key] >= AC_SPEAK_TICKS_ON && !acSpeakOn[key]) {
+                acSpeakOn[key] = true;
+                acApplyTalking(key);
+            }
+        } else {
+            acSpeakTicks[key] = 0;
+            if (acSpeakOn[key] && now - (acSpeakLast[key] || 0) > AC_SPEAK_HOLD_MS) {
+                acSpeakOn[key] = false;
+                acApplyTalking(key);
+            }
+        }
+    });
+}
+
+function acStartTalking() {
+    if (acSpeakTimer) return;
+    acSpeakTimer = setInterval(acSampleTalking, 100);
+}
+
+function acStopTalking() {
+    if (acSpeakTimer) { clearInterval(acSpeakTimer); acSpeakTimer = null; }
+    acSpeakOn = {};
+    acSpeakTicks = {};
+    acSpeakLast = {};
+    document.querySelectorAll('.call-participant.talking').forEach(function (row) {
+        row.classList.remove('talking');
+    });
+}
+
+function acToggleLocalMute(sid) {
+    if (!sid || sid === acMe()) return;
+    acLocalMuted[sid] = !acLocalMuted[sid];
+    const el = acAudioEls[sid];
+    if (el) el.muted = !!acLocalMuted[sid];
+    acRenderParticipants();
 }
 
 async function acReconcile() {
@@ -329,12 +473,15 @@ function acStopLocal() {
         acLocalStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) { /* ignore */ } });
         acLocalStream = null;
     }
+    acRemoveAnalyzer(AC_LOCAL_KEY);
+    acStopTalking();
     acMuted = false;
     acStopTimer();
 }
 
 async function acStartCall() {
     if (!isHost || acInCall) return;
+    acEnsureAudioCtx();
     try { await acEnsureStream(); }
     catch (e) { showToast('Microphone permission is required to start a call'); return; }
     acInCall = true;
@@ -346,6 +493,7 @@ async function acStartCall() {
 async function acAcceptInvite() {
     if (acInCall) return;
     if (!acState.active) { acHideInvite(); return; }
+    acEnsureAudioCtx();
     try { await acEnsureStream(); }
     catch (e) { showToast('Microphone permission is required to join the call'); return; }
     acInCall = true;
@@ -442,6 +590,9 @@ function initAudioCall() {
     if (leave) leave.addEventListener('click', acLeave);
     const end = document.getElementById('callEndBtn');
     if (end) end.addEventListener('click', acEndForAll);
+    document.addEventListener('pointerdown', function () {
+        if (acAudioCtx && acAudioCtx.state === 'suspended') acAudioCtx.resume().catch(function () {});
+    });
     acUpdateUI();
 }
 

@@ -89,6 +89,9 @@ between browsers.
   hangs up or drops out, the call keeps going for everyone still on it, until the
   last person leaves.
 - Mute yourself from the call panel; only the host can end the call for everyone.
+- Each participant row also has a **mute-for-me** button that silences just that
+  person in your own playback, and a small animated meter that lights up while
+  someone is talking.
 - Needs microphone permission, and a headset avoids echo on laptop speakers.
 
 **Host moderation**
@@ -204,7 +207,9 @@ element and receives state updates over Socket.IO.
 **Audio call.** A separate peer-to-peer mesh over microphone tracks. The server
 only tracks who is in the call and relays SDP and ICE, so a call outlives the host:
 it ends only when the last participant leaves, the host ends it for everyone, or
-the room expires.
+the room expires. Muting another person and the talking indicator are both
+client-side: the button just mutes that peer's local `<audio>`, and the indicator
+runs a WebAudio analyser over the audio you already receive.
 
 **Moderation.** The server relays a room roster (names and host flag) so the People
 panel is the same for everyone. A **kick** moves the viewer's client id into a
