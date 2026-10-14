@@ -1,7 +1,7 @@
-from flask_socketio import emit, join_room, leave_room
+from flask_socketio import emit, leave_room
 from flask import request
 from ..services import room_service
-from . import registry, chat, audio_call
+from . import registry, chat, audio_call, moderation
 
 socketio = None
 
@@ -20,44 +20,22 @@ def register_rooms_events(sio):
         if not room:
             emit('error', {'message': 'Room not found'})
             return
-        # A viewer removed by the host (tracked by browser client id) cannot
-        # rejoin this room for as long as it exists.
+        # Permanently banned clients are turned away with no waiting screen.
         if client_id and client_id in (room.get('banned') or {}):
-            emit('kicked', {'reason': 'You were removed from this room by the host'})
+            emit('banned', {'reason': 'You are banned from this room'})
             return
+        # Kicked clients are parked until the host approves (or bans) them.
+        if client_id and client_id in (room.get('pending') or {}):
+            moderation.park(request.sid, room_id, client_id, name)
+            emit('pending_approval', {'reason': 'Waiting for the host to let you in'})
+            return
+
         wants_host = room_service.is_host(room_id, token)
         participants = room.setdefault('participants', {})
         host_sid = room.get('host_sid')
         host_present = bool(host_sid) and host_sid in participants
         is_host = wants_host and (not host_present or host_sid == request.sid)
-        if is_host:
-            room['host_sid'] = request.sid
-
-        join_room(room_id)
-        registry.set_sid(request.sid, room_id, is_host, name, client_id)
-
-        participants[request.sid] = {'is_host': is_host}
-        room_service.update_room(room_id, {'participants': participants, 'host_sid': room.get('host_sid')})
-
-        emit('joined', {
-            'room_id': room_id,
-            'sid': request.sid,
-            'is_host': is_host,
-            'playback_state': room.get('playback_state'),
-            'media': room.get('media'),
-            'queue': room.get('queue', []),
-            'current_index': room.get('current_index', 0),
-            'mode': room.get('mode', 'media'),
-            'screen_share': room.get('screen_share', {'active': False}),
-            'subtitles': room.get('subtitles', {'cues': [], 'delay': 0}),
-            'picture': room.get('picture', room_service.DEFAULT_PICTURE),
-            'chat': room.get('chat', []),
-            'audio_call': audio_call.state_payload(room),
-            'participants': roster(room_id),
-            'participant_count': len(participants)
-        })
-        sio.emit('participants_update', roster_payload(room_id), to=room_id)
-        chat.notify_system(room_id, '{name} joined', name)
+        _admit(request.sid, room_id, name, client_id, is_host)
 
     @sio.on('leave')
     def on_leave(data):
@@ -68,6 +46,9 @@ def register_rooms_events(sio):
     @sio.on('disconnect')
     def on_disconnect():
         sid = request.sid
+        # A parked (pending-approval) socket never entered the registry, so clear
+        # its waiting slot before the registry lookup returns early.
+        moderation.handle_disconnect(sid)
         info = registry.remove_sid(sid)
         if not info:
             return
@@ -95,6 +76,49 @@ def register_rooms_events(sio):
 
         if info.get('is_host'):
             sio.emit('host_left', {}, to=room_id)
+
+
+def _admit(sid, room_id, name, client_id, is_host):
+    """Add a socket to the room and send it the full ``joined`` state.
+
+    Used both by ``join`` and by host approval of a parked (kicked) viewer, so it
+    emits to an explicit sid rather than the request-bound connection.
+    """
+    room = room_service.get_room(room_id)
+    if not room:
+        return
+    participants = room.setdefault('participants', {})
+    if is_host:
+        room['host_sid'] = sid
+    if socketio:
+        socketio.server.enter_room(sid, room_id)
+    registry.set_sid(sid, room_id, is_host, name, client_id)
+    participants[sid] = {'is_host': is_host}
+    room_service.update_room(room_id, {'participants': participants, 'host_sid': room.get('host_sid')})
+
+    payload = {
+        'room_id': room_id,
+        'sid': sid,
+        'is_host': is_host,
+        'playback_state': room.get('playback_state'),
+        'media': room.get('media'),
+        'queue': room.get('queue', []),
+        'current_index': room.get('current_index', 0),
+        'mode': room.get('mode', 'media'),
+        'screen_share': room.get('screen_share', {'active': False}),
+        'subtitles': room.get('subtitles', {'cues': [], 'delay': 0}),
+        'picture': room.get('picture', room_service.DEFAULT_PICTURE),
+        'chat': room.get('chat', []),
+        'audio_call': audio_call.state_payload(room),
+        'participants': roster(room_id),
+        'participant_count': len(participants),
+    }
+    if is_host:
+        payload['pending'] = moderation.pending_list(room)
+    if socketio:
+        socketio.emit('joined', payload, to=sid)
+        socketio.emit('participants_update', roster_payload(room_id), to=room_id)
+    chat.notify_system(room_id, '{name} joined', name)
 
 
 def _cleanup_participant(sid, room_id, name=None):

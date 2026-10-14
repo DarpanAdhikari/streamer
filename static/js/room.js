@@ -269,14 +269,16 @@ function initializeSocket() {
         reconnectionDelayMax: 5000,
         timeout: 20000
     });
-    socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName(), client_id: getClientId() });
+    socket.emit('join', roomJoinPayload());
     if (typeof initChatSocket === 'function') initChatSocket();
     if (typeof initAudioCallSocket === 'function') initAudioCallSocket();
     if (typeof initRosterSocket === 'function') initRosterSocket();
 
     socket.on('connect', function () { reconnectAttempts = 0; hostClaimRetried = false; });
     socket.on('reconnect', function () {
-        socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName(), client_id: getClientId() });
+        // After a kick, don't auto-rejoin; the user must request approval.
+        if (typeof canRejoin === 'function' && !canRejoin()) return;
+        socket.emit('join', roomJoinPayload());
         socket.emit('sync_request', { room_id: roomId });
     });
 
@@ -286,12 +288,13 @@ function initializeSocket() {
         if (typeof loadChatHistory === 'function') loadChatHistory(data.chat);
         if (typeof loadAudioCallState === 'function') loadAudioCallState(data.audio_call);
         if (typeof loadRoster === 'function') loadRoster(data.participants);
+        if (typeof rosterOnJoined === 'function') rosterOnJoined(data);
         // A host token holder demoted to viewer is usually a stale socket during a
         // refresh; retry once so the refreshed host reclaims the role.
         if (!data.is_host && hostToken && !hostClaimRetried) {
             hostClaimRetried = true;
             setTimeout(function () {
-                if (socket) socket.emit('join', { room_id: roomId, token: hostToken, client_id: getClientId() });
+                if (socket) socket.emit('join', roomJoinPayload());
             }, 1500);
         }
         document.getElementById('participantCount').textContent = (data.participant_count || 1) + ' watching';

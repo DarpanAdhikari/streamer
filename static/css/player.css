@@ -579,6 +579,14 @@ body.room-body {
 }
 .roster-badge.host { background: rgba(56, 189, 248, 0.2); color: #7dd3fc; }
 .roster-kick { color: var(--red); }
+.roster-ban { color: var(--red); opacity: 0.75; }
+.roster-ban:hover, .roster-kick:hover { opacity: 1; }
+#rosterRequestsBtn { position: relative; }
+.request-list { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.request-item { display: flex; align-items: center; gap: 8px; }
+.request-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.request-approve, .request-ban { padding: 6px 10px; font-size: 0.8rem; }
+.request-ban { color: var(--red); }
 .chat-unread-badge {
     position: absolute;
     top: -6px;

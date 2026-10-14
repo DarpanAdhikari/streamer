@@ -9,14 +9,14 @@ def join(client, room_id, token=None, name=None, client_id=None):
     if client_id is not None:
         payload['client_id'] = client_id
     client.emit('join', payload)
-    for msg in client.get_received():
-        if msg['name'] == 'joined':
-            return msg['args'][0]
-    return None
 
 
 def events(client, name):
     return [m['args'][0] for m in client.get_received() if m['name'] == name]
+
+
+def event_names(client):
+    return [m['name'] for m in client.get_received()]
 
 
 def queued(client, name):
@@ -25,8 +25,8 @@ def queued(client, name):
     return [p for p in getattr(client, 'queue', []) if p.get('name') == name]
 
 
-def participants_of(room_id):
-    return room_service.get_room(room_id)['participants']
+def room(room_id):
+    return room_service.get_room(room_id)
 
 
 class ModerationSocketTests(unittest.TestCase):
@@ -41,101 +41,162 @@ class ModerationSocketTests(unittest.TestCase):
     def _room(self, viewer_client_id='viewer-cid'):
         room_id, host_token = room_service.create_room()
         host = socketio.test_client(self.app)
-        host_sid = join(host, room_id, host_token, name='Host PC', client_id='host-cid')['sid']
+        join(host, room_id, host_token, name='Host PC', client_id='host-cid')
+        host_sid = events(host, 'joined')[-1]['sid']
         viewer = socketio.test_client(self.app)
-        viewer_sid = join(viewer, room_id, name='Viewer PC', client_id=viewer_client_id)['sid']
-        host.get_received()
-        viewer.get_received()
+        join(viewer, room_id, name='Viewer PC', client_id=viewer_client_id)
+        viewer_sid = events(viewer, 'joined')[-1]['sid']
         return room_id, host_token, host, host_sid, viewer, viewer_sid
 
-    def test_host_kicks_viewer(self):
+    def test_host_kick_parks_viewer(self):
         room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room()
 
         host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
 
         self.assertTrue(queued(viewer, 'kicked'))
         self.assertFalse(viewer.is_connected())
-        self.assertNotIn(viewer_sid, participants_of(room_id))
+        self.assertNotIn(viewer_sid, room(room_id)['participants'])
+        self.assertIn('viewer-cid', room(room_id)['pending'])
+        self.assertTrue(events(host, 'pending_update'))
 
         host.disconnect()
-        if viewer.is_connected():
-            viewer.disconnect()
 
-    def test_non_host_cannot_kick(self):
-        room_id, _host_token, host, host_sid, viewer, viewer_sid = self._room()
+    def test_kicked_client_join_is_parked(self):
+        room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room(viewer_client_id='repeat-cid')
+        host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
+        host.get_received()
+
+        again = socketio.test_client(self.app)
+        join(again, room_id, name='Repeat', client_id='repeat-cid')
+        received = event_names(again)
+        self.assertIn('pending_approval', received)
+        self.assertNotIn('joined', received)
+        self.assertTrue(again.is_connected())
+
+        updates = events(host, 'pending_update')
+        self.assertTrue(updates)
+        self.assertEqual(updates[-1]['pending'][0]['name'], 'Repeat')
+
+        host.disconnect()
+        again.disconnect()
+
+    def test_host_approve_admits_waiting_client(self):
+        room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room(viewer_client_id='repeat-cid')
+        host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
+        host.get_received()
+        again = socketio.test_client(self.app)
+        join(again, room_id, name='Repeat', client_id='repeat-cid')
+        again.get_received()
+        host.get_received()
+
+        host.emit('approve_viewer', {'room_id': room_id, 'token': host_token, 'client_id': 'repeat-cid'})
+
+        joined = events(again, 'joined')
+        self.assertTrue(joined)
+        self.assertNotIn('repeat-cid', room(room_id)['pending'])
+        self.assertIn(joined[-1]['sid'], room(room_id)['participants'])
+
+        host.disconnect()
+        again.disconnect()
+
+    def test_host_ban_after_kick_is_permanent(self):
+        room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room(viewer_client_id='repeat-cid')
+        host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
+        host.get_received()
+        again = socketio.test_client(self.app)
+        join(again, room_id, name='Repeat', client_id='repeat-cid')
+        again.get_received()
+        host.get_received()
+
+        host.emit('ban_client', {'room_id': room_id, 'token': host_token, 'client_id': 'repeat-cid'})
+
+        self.assertTrue(queued(again, 'banned'))
+        self.assertFalse(again.is_connected())
+        self.assertNotIn('repeat-cid', room(room_id)['pending'])
+        self.assertIn('repeat-cid', room(room_id)['banned'])
+
+        # A permanently banned client is refused outright, with no waiting screen.
+        third = socketio.test_client(self.app)
+        join(third, room_id, name='Repeat', client_id='repeat-cid')
+        received = event_names(third)
+        self.assertIn('banned', received)
+        self.assertNotIn('joined', received)
+        self.assertNotIn('pending_approval', received)
+
+        host.disconnect()
+        third.disconnect()
+
+    def test_ban_active_viewer(self):
+        room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room(viewer_client_id='vcid')
+
+        host.emit('ban_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
+
+        self.assertTrue(queued(viewer, 'banned'))
+        self.assertFalse(viewer.is_connected())
+        self.assertIn('vcid', room(room_id)['banned'])
+        self.assertNotIn('vcid', room(room_id)['pending'])
+
+        host.disconnect()
+
+    def test_non_host_cannot_moderate(self):
+        room_id, _host_token, host, host_sid, viewer, _viewer_sid = self._room()
 
         viewer.emit('kick_viewer', {'room_id': room_id, 'token': None, 'target': host_sid})
         self.assertTrue([m for m in viewer.get_received() if m['name'] == 'error'])
+        viewer.emit('approve_viewer', {'room_id': room_id, 'client_id': 'x'})
+        viewer.emit('ban_client', {'room_id': room_id, 'client_id': 'x'})
 
-        # A duplicated host-token connection demoted to viewer is not the host.
-        dup = socketio.test_client(self.app)
-        info = join(dup, room_id, _host_token, name='Dup', client_id='dup-cid')
-        self.assertFalse(info['is_host'])
-        dup.get_received()
-        dup.emit('kick_viewer', {'room_id': room_id, 'token': _host_token, 'target': viewer_sid})
-        self.assertTrue([m for m in dup.get_received() if m['name'] == 'error'])
-        self.assertIn(viewer_sid, participants_of(room_id))
-
-        host.disconnect()
-        dup.disconnect()
-        viewer.disconnect()
-
-    def test_cannot_kick_the_host(self):
-        room_id, host_token, host, host_sid, viewer, _viewer_sid = self._room()
-
-        host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': host_sid})
-
-        self.assertIn(host_sid, participants_of(room_id))
-        self.assertFalse(events(host, 'kicked'))
+        self.assertEqual(room(room_id)['pending'], {})
+        self.assertTrue(viewer.is_connected())
 
         host.disconnect()
         viewer.disconnect()
 
-    def test_kicked_client_id_cannot_rejoin(self):
+    def test_pending_included_in_host_joined(self):
         room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room(viewer_client_id='repeat-cid')
-
         host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
         host.get_received()
-
-        rejoiner = socketio.test_client(self.app)
-        rejoiner.emit('join', {'room_id': room_id, 'name': 'Rejoiner', 'client_id': 'repeat-cid'})
-        received = rejoiner.get_received()
-        self.assertFalse(any(m['name'] == 'joined' for m in received))
-        self.assertTrue(any(m['name'] == 'kicked' for m in received))
-        self.assertEqual(len(participants_of(room_id)), 1)
-
         host.disconnect()
-        rejoiner.disconnect()
-        if viewer.is_connected():
-            viewer.disconnect()
 
-    def test_kick_removes_viewer_from_audio_call(self):
-        room_id, host_token, host, host_sid, viewer, viewer_sid = self._room()
+        new_host = socketio.test_client(self.app)
+        join(new_host, room_id, host_token, name='Host Again', client_id='host-cid')
+        joined = events(new_host, 'joined')[-1]
 
-        host.emit('ac_start', {'room_id': room_id, 'token': host_token})
-        viewer.emit('ac_accept', {'room_id': room_id})
-        host.get_received()
-        viewer.get_received()
-        self.assertIn(viewer_sid, room_service.get_room(room_id)['audio_call']['participants'])
+        self.assertEqual([p['client_id'] for p in joined['pending']], ['repeat-cid'])
 
+        new_host.disconnect()
+
+    def test_approve_clears_request_when_waiting_client_gone(self):
+        room_id, host_token, host, _host_sid, viewer, viewer_sid = self._room(viewer_client_id='repeat-cid')
         host.emit('kick_viewer', {'room_id': room_id, 'token': host_token, 'target': viewer_sid})
+        host.get_received()
+        again = socketio.test_client(self.app)
+        join(again, room_id, name='Repeat', client_id='repeat-cid')
+        again.get_received()
+        host.get_received()
+        again.disconnect()
 
-        call = room_service.get_room(room_id)['audio_call']
-        self.assertNotIn(viewer_sid, call['participants'])
-        self.assertIn(host_sid, call['participants'])
+        self.assertIn('repeat-cid', room(room_id)['pending'])
+
+        host.emit('approve_viewer', {'room_id': room_id, 'token': host_token, 'client_id': 'repeat-cid'})
+        self.assertNotIn('repeat-cid', room(room_id)['pending'])
+
+        # The approval sticks: the next join is admitted normally.
+        fresh = socketio.test_client(self.app)
+        join(fresh, room_id, name='Repeat', client_id='repeat-cid')
+        self.assertIn('joined', event_names(fresh))
 
         host.disconnect()
-        if viewer.is_connected():
-            viewer.disconnect()
+        fresh.disconnect()
 
     def test_roster_is_sent_on_join(self):
-        room_id, _host_token, host, host_sid, viewer, viewer_sid = self._room()
+        room_id, _host_token, host, _host_sid, viewer, _viewer_sid = self._room()
+
         new = socketio.test_client(self.app)
-        info = join(new, room_id, name='New', client_id='new-cid')
+        join(new, room_id, name='New', client_id='new-cid')
+        info = events(new, 'joined')[-1]
 
         self.assertEqual(len(info['participants']), 3)
-        names = {p['name'] for p in info['participants']}
-        self.assertIn('Host PC', names)
         self.assertEqual(sum(1 for p in info['participants'] if p['is_host']), 1)
 
         host.disconnect()

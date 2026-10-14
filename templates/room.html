@@ -199,6 +199,9 @@
                 <div class="panel" id="rosterPanel">
                     <div class="panel-head">
                         <h3>People <span id="rosterCount" class="muted">0</span></h3>
+                        <div class="panel-actions">
+                            <button id="rosterRequestsBtn" class="btn icon-btn hidden" title="Join requests">🔔<span id="rosterRequestsBadge" class="chat-unread-badge">0</span></button>
+                        </div>
                     </div>
                     <div id="rosterList" class="roster" aria-live="polite"></div>
                 </div>
@@ -310,6 +313,48 @@
             <div class="modal-actions">
                 <button id="callDeclineBtn" class="btn">Decline</button>
                 <button id="callAcceptBtn" class="btn btn-primary">Accept</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="pendingModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="pendingTitle">
+        <div class="modal-card">
+            <div class="modal-head"><h3 id="pendingTitle">Join requests</h3></div>
+            <div id="pendingList" class="request-list"></div>
+            <p id="pendingEmpty" class="muted">No pending requests.</p>
+            <div class="modal-actions">
+                <button id="pendingCloseBtn" class="btn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="waitingModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-card">
+            <div class="modal-head"><h3>Waiting for approval</h3></div>
+            <p class="muted">The host has been asked to let you back into this room.</p>
+            <div class="modal-actions">
+                <button id="waitingLeaveBtn" class="btn">Leave</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="removedModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-card">
+            <div class="modal-head"><h3>Removed from room</h3></div>
+            <p class="muted">The host removed you from this room. You can ask to rejoin.</p>
+            <div class="modal-actions">
+                <button id="removedLeaveBtn" class="btn">Leave</button>
+                <button id="removedRejoinBtn" class="btn btn-primary">Request to rejoin</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="bannedModal" class="modal" role="dialog" aria-modal="true">
+        <div class="modal-card">
+            <div class="modal-head"><h3>Banned from room</h3></div>
+            <p class="muted">The host has banned you from this room.</p>
+            <div class="modal-actions">
+                <button id="bannedHomeBtn" class="btn btn-primary">Back to home</button>
             </div>
         </div>
     </div>

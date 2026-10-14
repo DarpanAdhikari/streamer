@@ -92,9 +92,12 @@ between browsers.
 - Needs microphone permission, and a headset avoids echo on laptop speakers.
 
 **Host moderation**
-- A **People** panel lists everyone in the room. The host can remove a viewer with
-  the ✕ button. The removed viewer sees a notice and is returned to the home page,
-  and cannot rejoin that room for as long as it exists.
+- A **People** panel lists everyone in the room. The host can **kick** a viewer (✕)
+  or **ban** them (⛔).
+- A kicked viewer is removed and sees a waiting screen on their next visit. The host
+  gets a request alert and can **Approve** them back in or **Ban** them permanently.
+- A ban is permanent for the lifetime of the room. Moderation is keyed to the
+  browser, not the IP, so other people on the same network are unaffected.
 
 **Permissions**
 - The host can allow viewers to play/pause and to seek.
@@ -133,12 +136,14 @@ between browsers.
 2. Mute or leave from the call panel. If your connection drops, you are prompted to
    rejoin.
 
-### Remove a viewer (host)
+### Moderating viewers (host)
 
-1. In the **People** panel, click **✕** next to a viewer to remove them from the
-   room. They see a short notice and are returned to the home page.
-2. Removal is remembered for the room's lifetime, so the same browser cannot rejoin
-   that room.
+1. In the **People** panel, click **✕** to **kick** a viewer or **⛔** to **ban**
+   them.
+2. A kicked viewer is removed immediately. When they reopen the link they wait for
+   approval. Click the **🔔** request button to open the list, then choose **Approve**
+   (let them back in) or **Ban** (block them permanently).
+3. A ban lasts for the lifetime of the room; the same browser cannot rejoin.
 
 ### Before you start
 
@@ -202,9 +207,10 @@ it ends only when the last participant leaves, the host ends it for everyone, or
 the room expires.
 
 **Moderation.** The server relays a room roster (names and host flag) so the People
-panel is the same for everyone. When the host removes a viewer, the server records
-that browser's client id for the room's lifetime, then disconnects them; a later join
-with the same client id is refused.
+panel is the same for everyone. A **kick** moves the viewer's client id into a
+`pending` set and disconnects them; reopening the link parks them on a waiting screen
+and alerts the host, who can **approve** (admit) or **ban** (move to a `banned` set,
+refused outright). Both sets live only as long as the room does.
 
 ## Run it locally
 
@@ -304,7 +310,7 @@ reconnect state.
 - Rooms live in memory. On an ephemeral host such as the free Render tier they do
   not survive a restart or an idle sleep, so shared links expire with them. Persist
   the room store (for example in Redis) if links need to outlive restarts.
-- A kicked viewer is blocked by a browser-local client id, not an IP. Clearing the
-  site's data or using a private window lets them back in; the block is a deterrent,
-  not airtight.
+- Moderation is keyed to a browser-local client id, not an IP. Clearing the site's
+  data or using a private window gives a fresh identity, so a kick or ban is a
+  deterrent rather than airtight.
 - Subtitle timing for viewers is estimated from the shared playback position.
