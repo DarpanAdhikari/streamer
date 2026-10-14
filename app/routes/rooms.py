@@ -30,6 +30,13 @@ def index():
     return render_template('index.html')
 
 
+@rooms_bp.route('/healthz')
+def healthz():
+    """Cheap liveness endpoint; also handy as an uptime-ping target to keep a
+    free host from sleeping (see README)."""
+    return jsonify({'status': 'ok'})
+
+
 @rooms_bp.route('/create', methods=['POST'])
 def create():
     client_ip = request.remote_addr or 'unknown'
@@ -45,7 +52,7 @@ def create():
 def room(room_id):
     room = room_service.get_room(room_id)
     if not room:
-        return render_template('index.html', error='Room not found or expired'), 404
+        return render_template('expired.html', room_id=room_id), 404
     password = request.form.get('password') if request.method == 'POST' else None
     if room.get('password') and password != room.get('password'):
         return render_template('index.html', error='Invalid password'), 403

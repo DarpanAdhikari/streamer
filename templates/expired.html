@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Room ended - Watch Together</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css', v=ASSET_VERSION) }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Watch Together</h1>
+        </header>
+
+        <div class="card">
+            <h2 class="expired-title">This room has ended or expired</h2>
+            <p class="subtitle">
+                Room <code>{{ room_id }}</code> is no longer available. Rooms are kept in memory,
+                so a server restart or a long idle period clears them.
+            </p>
+            <div class="actions">
+                <button id="createRoomBtn" class="btn btn-primary">Start a new room</button>
+                <a class="btn btn-secondary btn-link" href="/">Back to home</a>
+            </div>
+            <div id="roomInfo" class="room-info" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/expired.js', v=ASSET_VERSION) }}"></script>
+</body>
+</html>

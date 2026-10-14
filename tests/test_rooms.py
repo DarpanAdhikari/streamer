@@ -34,6 +34,18 @@ class RoomTests(unittest.TestCase):
         response = self.client.get(f'/room/{room_id}')
         self.assertEqual(response.status_code, 200)
 
+    def test_missing_room_shows_friendly_page(self):
+        response = self.client.get('/room/doesnotexist')
+        self.assertEqual(response.status_code, 404)
+        body = response.get_data(as_text=True)
+        self.assertIn('has ended or expired', body)
+        self.assertIn('createRoomBtn', body)
+
+    def test_healthz(self):
+        response = self.client.get('/healthz')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {'status': 'ok'})
+
 
 class HostRoleSocketTests(unittest.TestCase):
     """Only one connection per room may act as host (duplicate host tabs fall back)."""

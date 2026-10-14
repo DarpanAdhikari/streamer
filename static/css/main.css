@@ -124,6 +124,17 @@ header h1 {
     margin-top: 15px;
 }
 
+.expired-title {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+}
+
+.btn-link {
+    display: inline-block;
+    text-align: center;
+    text-decoration: none;
+}
+
 .room-info {
     margin-top: 15px;
     padding: 15px;

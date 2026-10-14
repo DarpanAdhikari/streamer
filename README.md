@@ -10,7 +10,9 @@ Built for small groups, roughly two to ten people, and no accounts are needed.
 
 > **Try the live demo:** [**streamer-m26o.onrender.com**](https://streamer-m26o.onrender.com/)
 > Create a room, send the link to a friend, and watch together. The free instance
-> sleeps when idle, so the first visit can take a minute to wake.
+> sleeps when idle, so the first visit can take a minute to wake. Rooms are kept in
+> memory there, so a link stops working after the demo restarts or sleeps — create a
+> new room if a link says it has ended.
 
 ## Why it exists
 
@@ -241,8 +243,15 @@ secure-context requirement.
 
 On the free tier the instance sleeps after about fifteen minutes idle and takes
 roughly a minute to wake, the disk is ephemeral, and a single instance runs. That
-matches the single-worker requirement. `render.yaml` deploys only after the CI
-checks in `.github/workflows/ci.yml` pass.
+matches the single-worker requirement. Rooms are held in memory, so **every restart
+or idle sleep clears them** and a shared link then shows "this room has ended".
+`render.yaml` sets `autoDeployTrigger: off` so routine pushes do not restart the
+service and drop a live room; deploy manually when nothing is in progress. If the
+service was created by hand, turn auto-deploy off in the Render dashboard too.
+
+To cut down idle sleeps, point a free uptime monitor (UptimeRobot, cron-job.org,
+and the like) at `GET /healthz` every ten minutes. That keeps the instance awake; it
+does not help across deploys — turning off auto-deploy is what covers those.
 
 > If you create the service by hand as a plain Web Service instead of a Blueprint,
 > Render uses its default `gunicorn app:app`. That still works: gunicorn auto-loads
@@ -272,4 +281,7 @@ screen sharing, chat, audio calls, rate limiting, expiry, and reconnect state.
   peer. It is comfortable for small groups and needs an SFU beyond that.
 - The room store and rate limiter are in-process, so the app runs as a single
   worker.
+- Rooms live in memory. On an ephemeral host such as the free Render tier they do
+  not survive a restart or an idle sleep, so shared links expire with them. Persist
+  the room store (for example in Redis) if links need to outlive restarts.
 - Subtitle timing for viewers is estimated from the shared playback position.
