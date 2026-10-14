@@ -1,7 +1,7 @@
 from flask_socketio import emit, join_room, leave_room
 from flask import request
 from ..services import room_service
-from . import registry
+from . import registry, chat
 
 socketio = None
 
@@ -14,6 +14,7 @@ def register_rooms_events(sio):
     def on_join(data):
         room_id = data.get('room_id')
         token = data.get('token')
+        name = data.get('name')
         room = room_service.get_room(room_id)
         if not room:
             emit('error', {'message': 'Room not found'})
@@ -27,7 +28,7 @@ def register_rooms_events(sio):
             room['host_sid'] = request.sid
 
         join_room(room_id)
-        registry.set_sid(request.sid, room_id, is_host)
+        registry.set_sid(request.sid, room_id, is_host, name)
 
         participants[request.sid] = {'is_host': is_host}
         room_service.update_room(room_id, {'participants': participants, 'host_sid': room.get('host_sid')})
@@ -44,9 +45,11 @@ def register_rooms_events(sio):
             'screen_share': room.get('screen_share', {'active': False}),
             'subtitles': room.get('subtitles', {'cues': [], 'delay': 0}),
             'picture': room.get('picture', room_service.DEFAULT_PICTURE),
+            'chat': room.get('chat', []),
             'participant_count': len(participants)
         })
         sio.emit('participants_update', {'count': len(participants)}, to=room_id)
+        chat.notify_system(room_id, '{name} joined', name)
 
     @sio.on('leave')
     def on_leave(data):
@@ -61,7 +64,7 @@ def register_rooms_events(sio):
         if not info:
             return
         room_id = info['room_id']
-        _cleanup_participant(sid, room_id)
+        _cleanup_participant(sid, room_id, info.get('name'))
         room = room_service.get_room(room_id)
         if not room:
             return
@@ -84,13 +87,16 @@ def register_rooms_events(sio):
             sio.emit('host_left', {}, to=room_id)
 
 
-def _cleanup_participant(sid, room_id):
+def _cleanup_participant(sid, room_id, name=None):
     room = room_service.get_room(room_id)
     if not room:
         return
     participants = room.get('participants', {})
     if sid in participants:
+        if name is None:
+            name = registry.get_name(sid)
         del participants[sid]
         room_service.update_room(room_id, {'participants': participants})
         if socketio:
             socketio.emit('participants_update', {'count': len(participants)}, to=room_id)
+        chat.notify_system(room_id, '{name} left', name)

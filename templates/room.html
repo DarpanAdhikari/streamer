@@ -26,7 +26,7 @@
                 <button id="stopVideoBtn" class="btn" style="display:none;">Stop sharing</button>
                 <input type="file" id="videoFileInput" accept="video/*,.mp4,.m4v,.webm,.mkv,.mov,.avi,.ts,.mpg,.wmv,.flv,.ogg,.ogv,.m2ts,.mts" multiple hidden>
                 <button id="copyLinkBtn" class="btn" title="Copy link"><span class="btn-ico">🔗</span><span class="btn-label">Copy link</span></button>
-                <button id="sidebarToggle" class="btn icon-btn" title="Toggle panel" aria-label="Toggle panel">☰</button>
+                <button id="sidebarToggle" class="btn icon-btn" title="Toggle panel" aria-label="Toggle panel">☰<span id="chatUnread" class="chat-unread-badge hidden">0</span></button>
             </div>
         </header>
 
@@ -206,6 +206,26 @@
                     <p id="noPlaylist" class="muted">No playlist items</p>
                 </div>
 
+                <div class="panel" id="chatPanel">
+                    <div class="panel-head">
+                        <h3>Chat</h3>
+                        <div class="panel-actions">
+                            <button id="chatClearBtn" class="btn icon-btn" title="Clear chat" style="display:none;">🗑</button>
+                        </div>
+                    </div>
+                    <div id="chatMessages" class="chat-list" aria-live="polite"></div>
+                    <form id="chatForm" class="chat-form" autocomplete="off">
+                        <input id="chatInput" class="input chat-input" type="text" maxlength="500"
+                               placeholder="Say something…" aria-label="Chat message">
+                        <button id="chatSendBtn" class="btn btn-primary" type="submit">Send</button>
+                    </form>
+                    <div class="chat-name-row">
+                        <input id="chatName" class="input-small chat-name-input" type="text" maxlength="32"
+                               placeholder="Your name" aria-label="Your display name">
+                        <span id="chatCounter" class="chat-counter muted">0/500</span>
+                    </div>
+                </div>
+
                 <div class="panel" id="hostControlsPanel" style="display:none;">
                     <h3>Host playback</h3>
                     <div id="hostControls" class="stack">
@@ -269,6 +289,7 @@
     }
     </script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='js/chat.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/room.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/player.js', v=ASSET_VERSION) }}"></script>
     <script src="{{ url_for('static', filename='js/synchronization.js', v=ASSET_VERSION) }}"></script>

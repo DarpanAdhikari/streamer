@@ -269,16 +269,19 @@ function initializeSocket() {
         reconnectionDelayMax: 5000,
         timeout: 20000
     });
-    socket.emit('join', { room_id: roomId, token: hostToken });
+    socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName() });
+    if (typeof initChatSocket === 'function') initChatSocket();
 
     socket.on('connect', function () { reconnectAttempts = 0; hostClaimRetried = false; });
     socket.on('reconnect', function () {
-        socket.emit('join', { room_id: roomId, token: hostToken });
+        socket.emit('join', { room_id: roomId, token: hostToken, name: getChatName() });
         socket.emit('sync_request', { room_id: roomId });
     });
 
     socket.on('joined', function (data) {
         if (typeof data.is_host === 'boolean') applyRole(data.is_host);
+        if (typeof refreshChatHostUi === 'function') refreshChatHostUi();
+        if (typeof loadChatHistory === 'function') loadChatHistory(data.chat);
         // A host token holder demoted to viewer is usually a stale socket during a
         // refresh; retry once so the refreshed host reclaims the role.
         if (!data.is_host && hostToken && !hostClaimRetried) {

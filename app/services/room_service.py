@@ -77,6 +77,7 @@ def create_room(password=None):
             'mode': 'media',
             'screen_share': {'active': False, 'host_sid': None, 'source': None},
             'subtitles': {'cues': [], 'delay': 0},
+            'chat': [],
             'picture': dict(DEFAULT_PICTURE),
             'playback_state': {
                 'playing': False,
