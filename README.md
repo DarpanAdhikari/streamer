@@ -120,7 +120,9 @@ between browsers.
   someone is talking.
 - In fullscreen the same controls (join/leave, mute, participant list, and the
   host's end-for-all) appear in a call widget inside the player.
-- Needs microphone permission, and a headset avoids echo on laptop speakers.
+- Needs microphone permission, and a headset avoids echo on laptop speakers. The
+  browser asks before you start or join; if the microphone is already blocked, a
+  message points you to the browser's site settings.
 
 **Host moderation**
 - A **People** panel lists everyone in the room. The host can **kick** a viewer (✕)

@@ -213,11 +213,40 @@ function acUpdateUI() {
 
 /* --------------------------------- media ---------------------------------- */
 
+/* Query the mic permission without prompting, so a blocked microphone gets a
+   clear message instead of a silent failure (the native prompt will not appear
+   again once a site has been denied). Browsers without 'microphone' in the
+   Permissions API report 'unknown' and fall through to getUserMedia. */
+async function acMicPermission() {
+    if (!navigator.permissions || !navigator.permissions.query) return 'unknown';
+    try {
+        const status = await navigator.permissions.query({ name: 'microphone' });
+        return status.state;
+    } catch (e) {
+        return 'unknown';
+    }
+}
+
 async function acEnsureStream() {
-    if (acLocalStream) return acLocalStream;
+    const live = acLocalStream
+        && acLocalStream.getAudioTracks().some(function (t) { return t.readyState === 'live'; });
+    if (live) return acLocalStream;
+    if (acLocalStream) {
+        acLocalStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) { /* ignore */ } });
+        acLocalStream = null;
+        acRemoveAnalyzer(AC_LOCAL_KEY);
+    }
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error('Microphone is not supported in this browser');
     }
+    const state = await acMicPermission();
+    if (state === 'denied') {
+        const err = new Error('Microphone access is blocked. Allow it in your browser settings, then try again.');
+        err.code = 'denied';
+        throw err;
+    }
+    if (state === 'prompt') acEnsureAudioCtx();
+    // 'prompt' or 'granted' → getUserMedia shows the native permission ask.
     acLocalStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
@@ -513,7 +542,7 @@ async function acStartCall() {
     if (!isHost || acInCall) return;
     acEnsureAudioCtx();
     try { await acEnsureStream(); }
-    catch (e) { showToast('Microphone permission is required to start a call'); return; }
+    catch (e) { showToast(e && e.message ? e.message : 'Microphone permission is required to start a call'); return; }
     acInCall = true;
     acWasInCall = true;
     acRejoinPrompted = false;
@@ -525,7 +554,7 @@ async function acAcceptInvite() {
     if (!acState.active) { acHideInvite(); return; }
     acEnsureAudioCtx();
     try { await acEnsureStream(); }
-    catch (e) { showToast('Microphone permission is required to join the call'); return; }
+    catch (e) { showToast(e && e.message ? e.message : 'Microphone permission is required to join the call'); return; }
     acInCall = true;
     acWasInCall = true;
     acRejoinPrompted = false;
