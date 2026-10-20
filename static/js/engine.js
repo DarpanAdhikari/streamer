@@ -93,7 +93,10 @@ export async function probeSource(src, opts = {}) {
   const input = new Input({ formats: ALL_FORMATS, source });
   try {
     if (!await input.canRead()) return { readable: false };
-    let duration = await input.getDurationFromMetadata().catch(() => null);
+    // A known duration from the playing tier avoids computeDuration(), which
+    // walks every packet and can take a very long time on large files.
+    let duration = opts.durationHint || null;
+    if (!duration) duration = await input.getDurationFromMetadata().catch(() => null);
     if (!duration) duration = await input.computeDuration().catch(() => 0);
     const vt = await input.getPrimaryVideoTrack().catch(() => null);
     const at = await input.getPrimaryAudioTrack().catch(() => null);
@@ -891,14 +894,19 @@ export const FFMPEG_MAX_BYTES = 1.6e9;
 
 const FFMPEG_MODES = ['remux', 'x264', 'mpeg4'];
 
-function modeArgs(mode, inName, outName) {
+function audioMap(audioIndex) {
+  return Number.isInteger(audioIndex) && audioIndex >= 0 ? `0:a:${audioIndex}?` : '0:a?';
+}
+
+function modeArgs(mode, inName, outName, audioIndex) {
   const base = ['-hide_banner', '-loglevel', 'error', '-i', inName];
+  const maps = ['-map', '0:v:0?', '-map', audioMap(audioIndex)];
   const tail = ['-movflags', '+faststart', '-y', outName];
-  if (mode === 'remux') return [...base, '-map', '0:v:0?', '-map', '0:a?', '-c', 'copy', ...tail];
-  if (mode === 'x264') return [...base,
+  if (mode === 'remux') return [...base, ...maps, '-c', 'copy', ...tail];
+  if (mode === 'x264') return [...base, ...maps,
     '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '21', '-pix_fmt', 'yuv420p',
     '-c:a', 'aac', '-b:a', '160k', ...tail];
-  return [...base,
+  return [...base, ...maps,
     '-c:v', 'mpeg4', '-q:v', '4', '-vtag', 'xvid',
     '-c:a', 'aac', '-b:a', '160k', ...tail];
 }
@@ -927,7 +935,7 @@ async function ensureFfmpeg() {
  *   x264   — libx264 + aac (slow, broad compatibility)
  *   mpeg4  — mpeg4 part 2 + aac (last resort)
  */
-export async function ffmpegConvert(file, { modes = FFMPEG_MODES, onProgress, verify, signal } = {}) {
+export async function ffmpegConvert(file, { modes = FFMPEG_MODES, audioIndex, onProgress, verify, signal } = {}) {
   if (file.size > FFMPEG_MAX_BYTES)
     throw new EngineError('size', 'File is too large for in-browser conversion (limit ≈1.6 GB)');
   const ff = await ensureFfmpeg();
@@ -951,7 +959,7 @@ export async function ffmpegConvert(file, { modes = FFMPEG_MODES, onProgress, ve
       onProgress?.({ mode, progress: 0 });
       // fresh copy per attempt — writeFile transfers the buffer away
       await ff.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
-      const code = await ff.exec(modeArgs(mode, inName, outName));
+      const code = await ff.exec(modeArgs(mode, inName, outName, audioIndex));
       try { await ff.deleteFile(inName); } catch {}
       ff.off?.('progress', onProg);
       if (signal?.aborted) throw new DOMException('cancelled', 'AbortError');

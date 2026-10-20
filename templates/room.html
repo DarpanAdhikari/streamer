@@ -53,6 +53,20 @@
 
                         <div id="subtitleOverlay" class="subtitle-overlay"></div>
                         <div id="statsOverlay" class="stats-overlay hidden"></div>
+
+                        <div id="fsCallWidget" class="fs-call-widget hidden">
+                            <div class="fs-call-head">
+                                <span id="fsCallStatus" class="fs-call-status">Audio call</span>
+                                <span id="fsCallTimer" class="fs-call-timer muted"></span>
+                                <button id="fsCallJoinBtn" class="btn btn-primary fs-call-join" type="button">Join</button>
+                            </div>
+                            <div id="fsCallParticipants" class="call-participants fs-call-participants" aria-live="polite"></div>
+                            <div id="fsCallActions" class="fs-call-actions" style="display:none;">
+                                <button id="fsCallMuteBtn" class="btn" type="button">Mute</button>
+                                <button id="fsCallLeaveBtn" class="btn" type="button">Leave</button>
+                                <button id="fsCallEndBtn" class="btn" type="button" style="display:none;">End for all</button>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="control-bar">

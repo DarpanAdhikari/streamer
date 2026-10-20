@@ -55,7 +55,8 @@ between browsers.
 - Fullscreen takes over the whole watch view, so the control bar lays over the
   video as a gradient instead of disappearing along with the surrounding page.
   The title strip and page chrome are hidden, the controls come back on any mouse
-  or key press, and they fade after three seconds.
+  or key press, and they fade after three seconds. While an audio call is live, a
+  compact call widget also stays pinned to the top-right of the fullscreen player.
 
 **Audio**
 - Pick between embedded audio tracks when a file has more than one.
@@ -65,6 +66,9 @@ between browsers.
   readable codec (`eng · AC-3`).
 - Switching tracks reloads the file through the lossless remux engine and
   resumes from the same position, so the change applies to everyone in the room.
+  The last frame stays on screen during the reload, and the selected track is
+  honored exactly — if the remux fails you get an error and the previous track
+  keeps playing instead of silently falling back to the default audio.
 - Files with audio the browser cannot decode (AC3, EAC3, DTS) are converted on the
   fly.
 - The stats overlay (`Y`) reports the active track and codec.
@@ -114,6 +118,8 @@ between browsers.
 - Each participant row also has a **mute-for-me** button that silences just that
   person in your own playback, and a small animated meter that lights up while
   someone is talking.
+- In fullscreen the same controls (join/leave, mute, participant list, and the
+  host's end-for-all) appear in a call widget inside the player.
 - Needs microphone permission, and a headset avoids echo on laptop speakers.
 
 **Host moderation**

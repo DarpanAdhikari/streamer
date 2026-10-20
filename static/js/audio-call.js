@@ -75,9 +75,11 @@ function acHideInvite() {
 
 function acUpdateTimer() {
     const el = document.getElementById('callTimer');
+    const fsEl = document.getElementById('fsCallTimer');
     const btnLabel = document.getElementById('callBtnLabel');
     if (!acState.active || !acState.started_at) {
         if (el) el.textContent = '';
+        if (fsEl) fsEl.textContent = '';
         if (btnLabel && acInCall) btnLabel.textContent = 'In call';
         return;
     }
@@ -86,6 +88,7 @@ function acUpdateTimer() {
     const ss = String(secs % 60).padStart(2, '0');
     const text = mm + ':' + ss;
     if (el) el.textContent = text;
+    if (fsEl) fsEl.textContent = text;
     if (btnLabel && acInCall) btnLabel.textContent = 'In call · ' + text;
 }
 
@@ -101,46 +104,78 @@ function acStopTimer() {
     if (el) el.textContent = '';
 }
 
+function acMakeParticipantRow(p, me) {
+    const row = document.createElement('div');
+    row.className = 'call-participant' + (p.sid === me ? ' me' : '');
+    if (p.sid) row.dataset.sid = p.sid;
+
+    const mic = document.createElement('span');
+    mic.className = 'call-mic' + (p.muted ? ' muted' : '');
+    mic.textContent = p.muted ? '🔇' : '🎙';
+
+    const name = document.createElement('span');
+    name.className = 'call-name';
+    name.textContent = (p.name || 'Guest') + (p.sid === me ? ' (you)' : '');
+
+    const bars = document.createElement('span');
+    bars.className = 'talk-bars';
+    for (let i = 0; i < 3; i++) bars.appendChild(document.createElement('span'));
+
+    row.appendChild(mic);
+    row.appendChild(name);
+    row.appendChild(bars);
+
+    if (p.sid && p.sid !== me) {
+        const muted = !!acLocalMuted[p.sid];
+        const muteBtn = document.createElement('button');
+        muteBtn.type = 'button';
+        muteBtn.className = 'btn icon-btn call-mute-btn' + (muted ? ' active' : '');
+        muteBtn.title = muted ? 'Unmute for me' : 'Mute for me';
+        muteBtn.textContent = muted ? '🔇' : '🔊';
+        muteBtn.addEventListener('click', function () { acToggleLocalMute(p.sid); });
+        row.appendChild(muteBtn);
+    }
+    return row;
+}
+
 function acRenderParticipants() {
-    const box = document.getElementById('callParticipants');
-    if (!box) return;
     const me = acMe();
-    box.textContent = '';
-    acState.participants.forEach(function (p) {
-        const row = document.createElement('div');
-        row.className = 'call-participant' + (p.sid === me ? ' me' : '');
-        if (p.sid) row.dataset.sid = p.sid;
-
-        const mic = document.createElement('span');
-        mic.className = 'call-mic' + (p.muted ? ' muted' : '');
-        mic.textContent = p.muted ? '🔇' : '🎙';
-
-        const name = document.createElement('span');
-        name.className = 'call-name';
-        name.textContent = (p.name || 'Guest') + (p.sid === me ? ' (you)' : '');
-
-        const bars = document.createElement('span');
-        bars.className = 'talk-bars';
-        for (let i = 0; i < 3; i++) bars.appendChild(document.createElement('span'));
-
-        row.appendChild(mic);
-        row.appendChild(name);
-        row.appendChild(bars);
-
-        if (p.sid && p.sid !== me) {
-            const muted = !!acLocalMuted[p.sid];
-            const muteBtn = document.createElement('button');
-            muteBtn.type = 'button';
-            muteBtn.className = 'btn icon-btn call-mute-btn' + (muted ? ' active' : '');
-            muteBtn.title = muted ? 'Unmute for me' : 'Mute for me';
-            muteBtn.textContent = muted ? '🔇' : '🔊';
-            muteBtn.addEventListener('click', function () { acToggleLocalMute(p.sid); });
-            row.appendChild(muteBtn);
-        }
-
-        box.appendChild(row);
+    ['callParticipants', 'fsCallParticipants'].forEach(function (id) {
+        const box = document.getElementById(id);
+        if (!box) return;
+        box.textContent = '';
+        acState.participants.forEach(function (p) {
+            box.appendChild(acMakeParticipantRow(p, me));
+        });
     });
     acRefreshTalking();
+}
+
+function acUpdateFsWidget() {
+    const widget = document.getElementById('fsCallWidget');
+    if (!widget) return;
+    // Visible in fullscreen whenever a call exists (or I'm in one).
+    const show = acInCall || acState.active;
+    widget.classList.toggle('hidden', !show);
+    if (!show) return;
+
+    const status = document.getElementById('fsCallStatus');
+    if (status) status.textContent = acInCall ? 'Audio call' : 'Audio call in progress';
+
+    const join = document.getElementById('fsCallJoinBtn');
+    if (join) {
+        join.style.display = acInCall ? 'none' : 'inline-block';
+        join.textContent = acState.active ? 'Join' : 'Start';
+    }
+
+    const actions = document.getElementById('fsCallActions');
+    if (actions) actions.style.display = acInCall ? 'flex' : 'none';
+
+    const mute = document.getElementById('fsCallMuteBtn');
+    if (mute) mute.textContent = acMuted ? 'Unmute' : 'Mute';
+
+    const end = document.getElementById('fsCallEndBtn');
+    if (end) end.style.display = (isHost && acInCall) ? 'inline-block' : 'none';
 }
 
 function acUpdateUI() {
@@ -166,6 +201,7 @@ function acUpdateUI() {
     const endBtn = document.getElementById('callEndBtn');
     if (endBtn) endBtn.style.display = (isHost && acInCall) ? 'inline-block' : 'none';
 
+    acUpdateFsWidget();
     acRenderParticipants();
 
     if (acInCall) acStartTalking();
@@ -280,19 +316,13 @@ function acRemoveAnalyzer(key) {
     delete acSpeakLast[key];
 }
 
-function acRowFor(sid) {
-    const rows = document.querySelectorAll('.call-participant');
-    for (let i = 0; i < rows.length; i++) {
-        if (rows[i].dataset.sid === sid) return rows[i];
-    }
-    return null;
-}
-
 function acApplyTalking(key) {
     const sid = key === AC_LOCAL_KEY ? acMe() : key;
     if (!sid) return;
-    const row = acRowFor(sid);
-    if (row) row.classList.toggle('talking', !!acSpeakOn[key]);
+    // Both the sidebar list and the fullscreen widget render the same sid.
+    document.querySelectorAll('.call-participant').forEach(function (row) {
+        if (row.dataset.sid === sid) row.classList.toggle('talking', !!acSpeakOn[key]);
+    });
 }
 
 function acRefreshTalking() {
@@ -590,6 +620,16 @@ function initAudioCall() {
     if (leave) leave.addEventListener('click', acLeave);
     const end = document.getElementById('callEndBtn');
     if (end) end.addEventListener('click', acEndForAll);
+
+    // Fullscreen call widget mirrors the topbar/panel controls.
+    const fsJoin = document.getElementById('fsCallJoinBtn');
+    if (fsJoin) fsJoin.addEventListener('click', acOnCallButton);
+    const fsMute = document.getElementById('fsCallMuteBtn');
+    if (fsMute) fsMute.addEventListener('click', acToggleMute);
+    const fsLeave = document.getElementById('fsCallLeaveBtn');
+    if (fsLeave) fsLeave.addEventListener('click', acLeave);
+    const fsEnd = document.getElementById('fsCallEndBtn');
+    if (fsEnd) fsEnd.addEventListener('click', acEndForAll);
     document.addEventListener('pointerdown', function () {
         if (acAudioCtx && acAudioCtx.state === 'suspended') acAudioCtx.resume().catch(function () {});
     });

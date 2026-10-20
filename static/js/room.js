@@ -188,6 +188,15 @@ function setupTrackControls() {
     if (audio) audio.addEventListener('change', function () {
         changeAudioTrack(parseInt(audio.value, 10) || 0);
     });
+    // The background metadata probe finishes after playback has already
+    // started; fold its result into the queue and the track picker.
+    window.addEventListener('wtlocal:probe', function (ev) {
+        const detail = (ev && ev.detail) || {};
+        if (!detail.file || !detail.probe) return;
+        storeProbe(detail.file, detail.probe);
+        refreshTrackControls();
+        if (typeof updatePlaylistUI === 'function') updatePlaylistUI();
+    });
 }
 
 async function openLocalVideo(file, allFiles) {
@@ -495,35 +504,103 @@ function refreshAudioTracks() {
     }
     tracks.forEach(function (track, i) {
         const opt = document.createElement('option');
-        opt.value = String(i);
+        const key = (typeof track.index === 'number') ? track.index : i;
+        opt.value = String(key);
         opt.textContent = audioTrackLabel(track, i);
-        if (i === (window.WTLocal.audioIndex || 0)) opt.selected = true;
+        if (key === (window.WTLocal.audioIndex || 0)) opt.selected = true;
         select.appendChild(opt);
     });
 }
 
+/* Freeze the live picture for the duration of a track switch: the remux
+   pipeline re-attaches to the same <video>, so without this the stage would go
+   black between teardown and the first new frame. */
+function freezeStageFrame() {
+    const v = document.getElementById('stageVideo');
+    const shell = document.querySelector('.player-shell');
+    if (!v || !shell || !v.videoWidth || !v.videoHeight) return null;
+    try {
+        const canvas = document.createElement('canvas');
+        canvas.width = v.videoWidth;
+        canvas.height = v.videoHeight;
+        canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+        const img = document.createElement('img');
+        img.id = 'audioSwitchFrame';
+        img.className = 'audio-switch-frame';
+        img.alt = '';
+        img.src = canvas.toDataURL('image/jpeg', 0.85);
+        shell.appendChild(img);
+        return img;
+    } catch (e) {
+        return null;
+    }
+}
+
+function clearStageFrame(frame) {
+    if (frame && frame.parentNode) frame.parentNode.removeChild(frame);
+}
+
+let audioSwitchInFlight = false;
+
 async function changeAudioTrack(index) {
     if (!isHost || !window.WTLocal || !window.WTLocal.file) return;
+    if (audioSwitchInFlight) return;
+    const select = document.getElementById('audioTrack');
     const v = document.getElementById('stageVideo');
+    const file = window.WTLocal.file;
     const resumeAt = (v && isFinite(v.currentTime)) ? v.currentTime : 0;
     const wasPlaying = !!(v && !v.paused);
+    const prevIndex = window.WTLocal.audioIndex || 0;
+    const tracks = (window.WTLocal.audioTracks && window.WTLocal.audioTracks()) || [];
+    const track = tracks.filter(function (t) { return t.index === index; })[0] || tracks[index];
+    if (!track) return;
+    const targetIndex = (typeof track.index === 'number') ? track.index : index;
 
-    if (typeof stopBroadcast === 'function') stopBroadcast();
-    hideOverlay();
-    showOverlay('Switching audio track…', true);
+    audioSwitchInFlight = true;
+    if (select) select.disabled = true;
+    const frame = freezeStageFrame();
+    if (typeof showToast === 'function') showToast('Switching audio track…');
     try {
-        await window.WTLocal.open(window.WTLocal.file, {
-            onPhase: updateEnginePhase,
+        if (typeof stopBroadcast === 'function') stopBroadcast();
+        const res = await window.WTLocal.open(file, {
             onProgress: updateEngineProgress,
-        }, { audioIndex: index, resumeAt: resumeAt, forceRemux: true });
+        }, {
+            audioIndex: targetIndex,
+            resumeAt: resumeAt,
+            forceRemux: true,
+            noTier3Fallback: true,
+        });
+        if (!res) return;
+        setTierChip(res.tier);
         hideOverlay();
-        if (v && isFinite(resumeAt)) { try { v.currentTime = resumeAt; } catch (e) { /* ignore */ } }
         if (typeof startBroadcast === 'function') startBroadcast('video');
         if (wasPlaying && v) v.play().catch(function () {});
-        storeProbe(window.WTLocal.file, window.WTLocal.probe);
+        storeProbe(file, window.WTLocal.probe);
         refreshTrackControls();
     } catch (e) {
-        showOverlay('Could not switch audio track: ' + (e && e.message ? e.message : 'error'), false);
+        // Never leave the stage dead: reopen the track that was playing.
+        try {
+            const res = await window.WTLocal.open(file, {
+                onPhase: updateEnginePhase,
+                onProgress: updateEngineProgress,
+            }, { audioIndex: prevIndex, resumeAt: resumeAt, forceRemux: true });
+            if (res) {
+                setTierChip(res.tier);
+                hideOverlay();
+                if (typeof startBroadcast === 'function') startBroadcast('video');
+                if (wasPlaying && v) v.play().catch(function () {});
+            }
+        } catch (e2) {
+            hideOverlay();
+        }
+        if (typeof showToast === 'function') {
+            showToast('Could not switch audio: ' + (e && e.message ? e.message : 'error'));
+        }
+    } finally {
+        clearStageFrame(frame);
+        audioSwitchInFlight = false;
+        if (select) select.disabled = false;
+        refreshAudioTracks();
     }
 }
 

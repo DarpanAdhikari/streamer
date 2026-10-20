@@ -67,7 +67,11 @@ const WTLocal = {
           this.tier = 2;
           this.info = { duration: this.engine.duration, audioTracks: this.engine.audioTracks || [] };
         } else {
+          // A track switch must never silently fall back to a re-encode of the
+          // default audio track — surface the remux failure instead.
+          if (opts.noTier3Fallback) throw lastErr || new EngineError('codec', 'Audio track switch failed');
           const res = await ffmpegConvert(file, {
+            audioIndex: this.audioIndex,
             verify: playableSmokeTest,
             onProgress: (p) => { if (myGen === this.gen && hooks.onProgress) hooks.onProgress(p); },
           });
@@ -79,10 +83,13 @@ const WTLocal = {
           this.info = { mode: res.mode };
         }
         if (myGen !== this.gen) return null;
-        await this._probe(file, convertedBlob, myGen);
-        if (myGen !== this.gen) return null;
+        const durationHint = (this.tier === 2 && this.engine && this.engine.duration)
+          || (this.video && isFinite(this.video.duration) ? this.video.duration : 0) || 0;
         const result = { tier: this.tier, info: this.info, file, probe: this.probe };
+        // Start playing first; probe in the background so metadata work
+        // (thumbnail decode, duration fallback) can never stall the picture.
         if (hooks.onReady) hooks.onReady(result);
+        this._probe(file, convertedBlob, myGen, durationHint);
         return result;
       } catch (e) {
         if (myGen !== this.gen) return null;
@@ -135,24 +142,35 @@ const WTLocal = {
   /* Metadata probe, independent of the tier that ended up playing the file.
      On tier 3 the converted blob is re-probed so codecs/resolution describe
      what actually plays, while the audio-track list stays from the source. */
-  async _probe(file, convertedBlob, myGen) {
-    const p = await probeSource(file).catch(() => null);
-    if (myGen !== this.gen) return;
-    this.probe = (p && p.readable) ? p : null;
-    if (!convertedBlob) return;
-    const c = await probeSource(convertedBlob).catch(() => null);
-    if (myGen !== this.gen || !c || !c.readable) return;
-    const base = this.probe || {};
-    this.probe = Object.assign({}, base, {
-      videoCodec: c.videoCodec,
-      audioCodec: c.audioCodec,
-      width: c.width,
-      height: c.height,
-      decodable: c.decodable,
-      duration: c.duration || base.duration || 0,
-      thumb: c.thumb || base.thumb || '',
-      audioTracks: (base.audioTracks && base.audioTracks.length) ? base.audioTracks : (c.audioTracks || []),
-    });
+  async _probe(file, convertedBlob, myGen, durationHint) {
+    const withTimeout = (p) => Promise.race([
+      p,
+      new Promise((resolve) => setTimeout(() => resolve(null), 8000)),
+    ]);
+    try {
+      const p = await withTimeout(probeSource(file, { durationHint }).catch(() => null));
+      if (myGen !== this.gen) return;
+      this.probe = (p && p.readable) ? p : null;
+      if (convertedBlob) {
+        const c = await withTimeout(probeSource(convertedBlob).catch(() => null));
+        if (myGen !== this.gen || !c || !c.readable) return;
+        const base = this.probe || {};
+        this.probe = Object.assign({}, base, {
+          videoCodec: c.videoCodec,
+          audioCodec: c.audioCodec,
+          width: c.width,
+          height: c.height,
+          decodable: c.decodable,
+          duration: c.duration || base.duration || 0,
+          thumb: c.thumb || base.thumb || '',
+          audioTracks: (base.audioTracks && base.audioTracks.length) ? base.audioTracks : (c.audioTracks || []),
+        });
+      }
+    } finally {
+      if (myGen === this.gen) {
+        window.dispatchEvent(new CustomEvent('wtlocal:probe', { detail: { file, probe: this.probe } }));
+      }
+    }
   },
 
   // Live MediaStream mirrored to viewers over WebRTC (see broadcast.js).
