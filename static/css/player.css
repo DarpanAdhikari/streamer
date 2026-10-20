@@ -844,6 +844,35 @@ body.theater .control-bar {
     z-index: 15;
 }
 #ctrlTheater.active { color: #c7d2fe; background: rgba(99, 102, 241, 0.25); }
+#ctrlFullscreen.active { color: #c7d2fe; background: rgba(99, 102, 241, 0.25); }
+
+/* ---------- Fullscreen ---------- */
+/* #watchView is the fullscreen element, so .control-bar and .stage-meta (its
+   children) are laid over the video instead of sitting outside the fullscreen
+   box where they used to disappear. Mirrors the theater-mode overlay. */
+#watchView:fullscreen,
+#watchView:-webkit-full-screen {
+    background: #000;
+}
+#watchView:fullscreen .stage-meta,
+#watchView:-webkit-full-screen .stage-meta {
+    display: none !important;
+}
+#watchView:fullscreen .control-bar,
+#watchView:-webkit-full-screen .control-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+    border-top: none;
+    z-index: 15;
+}
+/* Nothing to point at once the controls auto-hide. */
+#watchView:fullscreen.ui-hidden,
+#watchView:-webkit-full-screen.ui-hidden {
+    cursor: none;
+}
 
 /* ---------- Auto-hide chrome ---------- */
 .control-bar, .stage-meta { transition: opacity 0.25s ease; }

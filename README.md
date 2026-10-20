@@ -52,6 +52,10 @@ between browsers.
 - A stats overlay showing resolution and codec, which engine tier is in use, the
   active audio track, dropped frames, and buffer health.
 - Screenshots that include any picture adjustments you have applied.
+- Fullscreen takes over the whole watch view, so the control bar lays over the
+  video as a gradient instead of disappearing along with the surrounding page.
+  The title strip and page chrome are hidden, the controls come back on any mouse
+  or key press, and they fade after three seconds.
 
 **Audio**
 - Pick between embedded audio tracks when a file has more than one.

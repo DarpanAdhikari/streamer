@@ -38,6 +38,7 @@ function initPlayer() {
     initControlBar();
     setupCenterPlay();
     setupAutoHide();
+    setupFullscreen();
     setupSettingsMenu();
     bindHostEvents();
     setupGestures();
@@ -85,6 +86,9 @@ function setupKeyboardShortcuts() {
         if (!player) return;
         const tag = e.target.tagName;
         if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || e.target.isContentEditable) return;
+        // Any keypress is intent to interact: bring the controls back so they
+        // are visible in fullscreen too, not only when the mouse moves.
+        showChrome();
         switch (e.code) {
             case 'Space': case 'KeyK': e.preventDefault(); togglePlayback(); break;
             case 'KeyF': e.preventDefault(); toggleFullscreen(); break;
@@ -152,10 +156,34 @@ function requestSeek(position) {
     }
 }
 
+function isFullscreen() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+/* #watchView is the fullscreen element — not .player-shell — because the
+   control bar and title are siblings of .player-shell inside #watchView.
+   Fullscreening the shell alone hides both. */
 function toggleFullscreen() {
-    const shell = document.querySelector('.player-shell');
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (shell && shell.requestFullscreen) shell.requestFullscreen().catch(function () {});
+    if (isFullscreen()) {
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if (!exit) return;
+        try {
+            const r = exit.call(document);
+            if (r && r.catch) r.catch(function () {});
+        } catch (e) { /* ignore */ }
+        return;
+    }
+    // Prefer whichever view is on screen — fullscreening a hidden .view would
+    // show nothing — and fall back to the shell if the markup ever changes.
+    const view = document.querySelector('.view.active')
+        || document.getElementById('watchView')
+        || document.querySelector('.player-shell');
+    if (!view) return;
+    if (view.requestFullscreen) { view.requestFullscreen().catch(function () {}); return; }
+    if (view.webkitRequestFullscreen) { view.webkitRequestFullscreen(); return; }
+    // iOS Safari has no element fullscreen for arbitrary markup — the <video>
+    // goes fullscreen with the platform's own controls instead of ours.
+    if (player && player.webkitEnterFullscreen) player.webkitEnterFullscreen();
 }
 
 function togglePip() {
@@ -343,38 +371,69 @@ function setupCenterPlay() {
 
 let chromeTimer = null;
 
+function watchViewEl() { return document.getElementById('watchView'); }
+
+function mightBeInteracting() {
+    if (!player || player.paused) return true;
+    const menu = document.getElementById('settingsMenu');
+    if (menu && !menu.classList.contains('hidden')) return true;
+    const a = document.activeElement;
+    return !!(a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA'));
+}
+
+/* Reveals the controls and (re)arms the 3s hide timer. Safe to call from
+   anywhere — keyboard shortcuts, the fullscreenchange handler, playback events. */
+function showChrome() {
+    const view = watchViewEl();
+    if (!view) return;
+    view.classList.remove('ui-hidden');
+    clearTimeout(chromeTimer);
+    chromeTimer = setTimeout(hideChrome, 3000);
+}
+
+function hideChrome() {
+    if (mightBeInteracting()) return;
+    const view = watchViewEl();
+    if (!view) return;
+    view.classList.add('ui-hidden');
+}
+
 function setupAutoHide() {
-    const view = document.getElementById('watchView');
+    const view = watchViewEl();
     if (!view || !player) return;
-
-    function mightBeInteracting() {
-        if (!player || player.paused) return true;
-        const menu = document.getElementById('settingsMenu');
-        if (menu && !menu.classList.contains('hidden')) return true;
-        const a = document.activeElement;
-        return !!(a && (a.tagName === 'INPUT' || a.tagName === 'SELECT' || a.tagName === 'TEXTAREA'));
-    }
-
-    function showChrome() {
-        view.classList.remove('ui-hidden');
-        clearTimeout(chromeTimer);
-        chromeTimer = setTimeout(hideChrome, 3000);
-    }
-
-    function hideChrome() {
-        if (mightBeInteracting()) return;
-        view.classList.add('ui-hidden');
-    }
 
     view.addEventListener('mousemove', showChrome, { passive: true });
     view.addEventListener('pointerdown', showChrome, { passive: true });
     view.addEventListener('touchstart', showChrome, { passive: true });
     view.addEventListener('keydown', showChrome);
     player.addEventListener('play', showChrome);
-    player.addEventListener('pause', function () { clearTimeout(chromeTimer); view.classList.remove('ui-hidden'); });
+    player.addEventListener('pause', function () {
+        clearTimeout(chromeTimer);
+        view.classList.remove('ui-hidden');
+    });
     player.addEventListener('click', function () {
         if (view.classList.contains('ui-hidden')) showChrome();
     });
+}
+
+/* Entering or leaving fullscreen re-shows the controls (they can never be
+   stuck hidden behind the fullscreen element), re-arms the auto-hide timer,
+   marks the fullscreen button, and re-lays out the picture transforms. */
+function setupFullscreen() {
+    function onChange() {
+        const fs = isFullscreen();
+        const btn = document.getElementById('ctrlFullscreen');
+        if (btn) {
+            btn.classList.toggle('active', fs);
+            btn.setAttribute('aria-pressed', fs ? 'true' : 'false');
+        }
+        showChrome();
+        if (window.WTPicture && window.WTPicture.layout) {
+            setTimeout(function () { try { window.WTPicture.layout(); } catch (e) { /* ignore */ } }, 60);
+        }
+    }
+    document.addEventListener('fullscreenchange', onChange);
+    document.addEventListener('webkitfullscreenchange', onChange);
 }
 
 /* ----------------------------- settings menu ------------------------------ */
