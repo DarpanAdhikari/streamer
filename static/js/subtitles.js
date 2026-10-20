@@ -145,20 +145,45 @@ function turnOffSubtitles() {
     if (typeof updateCcButton === 'function') updateCcButton();
 }
 
+function setSubtitleStatus(text, kind) {
+    const el = document.getElementById('subtitleScanStatus');
+    if (!el) return;
+    el.textContent = text || '';
+    el.className = 'sub-status' + (kind ? ' ' + kind : '');
+    el.classList.toggle('hidden', !text);
+}
+
+/* "eng · SRT" style labels; falls back to "Embedded N" for tracks with no
+   language. Kept in the same shape the reference player uses. */
+function embeddedTrackLabel(track, i) {
+    const parts = [];
+    if (track.language) parts.push(String(track.language).toUpperCase());
+    else if (track.name) parts.push(track.name);
+    if (track.codec) parts.push(String(track.codec).toUpperCase());
+    if (parts.length) return parts.join(' · ');
+    return 'Embedded ' + (i + 1);
+}
+
 async function refreshSubtitleSources(force) {
     if (!isHost || !window.WTLocal || !window.WTLocal.listEmbeddedSubtitles) return;
     const file = window.WTLocal.file;
     if (!file) {
         embeddedTracks = [];
         scannedSubtitleFile = null;
+        setSubtitleStatus('');
         updateSubtitleDropdown();
         return;
     }
     if (!force && file === scannedSubtitleFile) { updateSubtitleDropdown(); return; }
+    setSubtitleStatus('Scanning for subtitle tracks…', 'busy');
     try {
         embeddedTracks = await window.WTLocal.listEmbeddedSubtitles();
         scannedSubtitleFile = file;
-    } catch (e) { embeddedTracks = []; }
+        setSubtitleStatus('');
+    } catch (e) {
+        embeddedTracks = [];
+        setSubtitleStatus('Could not scan for subtitle tracks', 'error');
+    }
     updateSubtitleDropdown();
 }
 
@@ -168,29 +193,50 @@ function updateSubtitleDropdown() {
     select.innerHTML = '';
     const none = document.createElement('option');
     none.value = '';
-    none.textContent = embeddedTracks.length ? 'None' : 'No subtitles';
+    none.textContent = embeddedTracks.length
+        ? 'Off'
+        : 'None found';
     select.appendChild(none);
 
     embeddedTracks.forEach(function (track, i) {
         const opt = document.createElement('option');
         opt.value = 'embed:' + i;
-        opt.textContent = track.name || track.language || ('Embedded ' + (i + 1));
+        opt.textContent = embeddedTrackLabel(track, i);
         select.appendChild(opt);
     });
+
+    const count = document.getElementById('subtitleCount');
+    if (count) {
+        count.textContent = embeddedTracks.length
+            ? embeddedTracks.length + (embeddedTracks.length === 1 ? ' track' : ' tracks')
+            : '';
+        count.classList.toggle('hidden', !embeddedTracks.length);
+    }
 }
 
 async function selectSubtitle(value) {
-    if (!value) { turnOffSubtitles(); return; }
+    if (!value) { turnOffSubtitles(); setSubtitleStatus(''); return; }
     if (value.indexOf('embed:') === 0) {
         const index = parseInt(value.slice(6), 10);
+        const track = embeddedTracks[index];
+        setSubtitleStatus('Extracting… (first use downloads a ~30 MB engine)', 'busy');
         try {
             const srt = await window.WTLocal.extractSubtitle(index);
             subtitleCues = parseCues(srt);
             subtitlesEnabled = true;
+            setSubtitleStatus(subtitleCues.length
+                ? subtitleCues.length + ' cues from ' + embeddedTrackLabel(track, index)
+                : '');
             broadcastSubtitle();
         } catch (e) {
             console.warn('Could not extract embedded subtitle:', e && e.message);
+            const msg = (e && e.code === 'subtitle' && e.message)
+                ? e.message
+                : (e && e.message) || 'unknown error';
+            setSubtitleStatus('Could not load this track: ' + msg, 'error');
             if (typeof showToast === 'function') showToast('Could not load that subtitle track');
+            subtitleCues = [];
+            broadcastSubtitle();
         }
         if (typeof updateCcButton === 'function') updateCcButton();
     }

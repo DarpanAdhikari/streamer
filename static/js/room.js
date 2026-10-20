@@ -9,6 +9,9 @@ let currentIndex = 0;
 let currentMode = 'media';
 let reconnectAttempts = 0;
 let hostFiles = [];
+/* Host-local per-file probe results, keyed by "name::size". Probes are never
+   sent to the server, so viewers keep the plain playlist row. */
+const hostProbes = {};
 let waitingStreamTimer = null;
 let hostClaimRetried = false;
 let permissions = {
@@ -203,11 +206,13 @@ async function openLocalVideo(file, allFiles) {
         hideOverlay();
         setTierChip(res.tier);
         hostFiles.push(file);
+        storeProbe(file, window.WTLocal.probe);
         const v = document.getElementById('stageVideo');
         if (v) v.play().catch(function () {});
         startBroadcast('video');
         setMediaStatus('ready', 'Live');
         updateControlAvailability();
+        scanSubtitlesForFile(file);
         if (window.WTLocal && window.WTLocal.listEmbeddedSubtitles) {
             const at = (window.WTLocal.audioTracks && window.WTLocal.audioTracks()) || [];
             window.WTLocal.listEmbeddedSubtitles().then(function (subs) {
@@ -399,9 +404,73 @@ function hasSelectableAudio() {
     return !!(window.WTLocal && window.WTLocal.audioTracks && window.WTLocal.audioTracks().length > 1);
 }
 
+/* Four-character codec codes from the probe/EBML scan → human names. */
+function shortCodec(c) {
+    if (!c) return '';
+    const map = {
+        avc1: 'H.264', avc3: 'H.264', hvc1: 'HEVC', hev1: 'HEVC', vp08: 'VP8', vp09: 'VP9',
+        av01: 'AV1', mp4v: 'MPEG-4', theora: 'Theora',
+        mp4a: 'AAC', ac3: 'AC-3', 'ac-3': 'AC-3', ec3: 'E-AC-3', 'ec-3': 'E-AC-3',
+        opus: 'Opus', vorbis: 'Vorbis', flac: 'FLAC', mp3: 'MP3', 'mp4a.40.2': 'AAC',
+        'mp4a.69': 'MP3', 'mp4a.6b': 'AC-3', dtsc: 'DTS', dtsh: 'DTS-HD', dtsx: 'DTS-X',
+        eac3: 'E-AC-3', truehd: 'TrueHD', aac: 'AAC', ac4: 'AC-4',
+    };
+    const key = String(c).split('.')[0].toLowerCase();
+    return map[key] || String(c).toUpperCase();
+}
+
 function audioTrackLabel(track, i) {
-    const name = track.name || track.language || ('Track ' + (i + 1));
-    return track.codec ? name + ' · ' + track.codec : name;
+    const label = track.name || track.language || ('Track ' + (i + 1));
+    const codec = shortCodec(track.codec);
+    return codec ? label + ' · ' + codec : label;
+}
+
+function probeKey(file) {
+    return file ? (file.name + '::' + file.size) : null;
+}
+
+function storeProbe(file, probe) {
+    const k = probeKey(file);
+    if (!k) return;
+    if (probe) hostProbes[k] = probe;
+    else delete hostProbes[k];
+}
+
+function probeForQueueItem(item) {
+    if (!item) return null;
+    const k = (item.filename || '') + '::' + (item.size || 0);
+    return hostProbes[k] || null;
+}
+
+/* Embedded-subtitle counts, filled in by a one-shot header scan per file.
+   Kept host-local for the same reason as probes. */
+const hostSubCounts = {};
+const hostSubScanned = {};
+
+function subCountKey(file) {
+    return file ? (file.name + '::' + file.size) : null;
+}
+
+function scanSubtitlesForFile(file) {
+    const k = subCountKey(file);
+    if (!k || !window.WTLocal || !window.WTLocal.listEmbeddedSubtitles) return;
+    if (hostSubScanned[k]) return;
+    hostSubScanned[k] = true;
+    window.WTLocal.listEmbeddedSubtitles(file).then(function (subs) {
+        hostSubCounts[k] = (subs && subs.length) || 0;
+        updatePlaylistUI();
+    }).catch(function () { hostSubScanned[k] = false; });
+}
+
+function trackChipsFor(item) {
+    const probe = probeForQueueItem(item);
+    const k = item ? ((item.filename || '') + '::' + (item.size || 0)) : null;
+    const chips = [];
+    const audioCount = (probe && probe.audioTracks && probe.audioTracks.length) || 0;
+    if (audioCount > 1) chips.push(audioCount + ' audio');
+    const subCount = (k && hostSubCounts[k]) || 0;
+    if (subCount > 0) chips.push(subCount + (subCount === 1 ? ' subtitle' : ' subtitles'));
+    return chips;
 }
 
 function refreshTrackControls() {
@@ -451,7 +520,8 @@ async function changeAudioTrack(index) {
         if (v && isFinite(resumeAt)) { try { v.currentTime = resumeAt; } catch (e) { /* ignore */ } }
         if (typeof startBroadcast === 'function') startBroadcast('video');
         if (wasPlaying && v) v.play().catch(function () {});
-        refreshAudioTracks();
+        storeProbe(window.WTLocal.file, window.WTLocal.probe);
+        refreshTrackControls();
     } catch (e) {
         showOverlay('Could not switch audio track: ' + (e && e.message ? e.message : 'error'), false);
     }
@@ -522,6 +592,20 @@ function updatePlaylistUI() {
         const div = document.createElement('div');
         div.className = 'playlist-item' + (idx === currentIndex ? ' current' : '');
 
+        const probe = isHost ? probeForQueueItem(item) : null;
+        const thumb = document.createElement('div');
+        thumb.className = 'pl-thumb';
+        if (probe && probe.thumb) {
+            const img = document.createElement('img');
+            img.alt = '';
+            img.src = probe.thumb;
+            thumb.appendChild(img);
+        }
+        div.appendChild(thumb);
+
+        const body = document.createElement('div');
+        body.className = 'pl-body';
+
         const name = document.createElement('span');
         name.className = 'pl-name';
         name.textContent = item.filename || ('Media ' + (idx + 1));
@@ -532,7 +616,19 @@ function updatePlaylistUI() {
                 else if (socket) socket.emit('media_select', { room_id: roomId, token: hostToken, index: idx });
             });
         }
-        div.appendChild(name);
+        body.appendChild(name);
+
+        const meta = document.createElement('span');
+        meta.className = 'pl-meta';
+        const bits = [];
+        if (probe && probe.duration) bits.push(formatTime(probe.duration));
+        else if (item.duration) bits.push(formatTime(item.duration));
+        if (probe && probe.videoCodec) bits.push(shortCodec(probe.videoCodec));
+        trackChipsFor(item).forEach(function (c) { bits.push(c); });
+        meta.textContent = bits.join(' · ');
+        if (bits.length) body.appendChild(meta);
+
+        div.appendChild(body);
 
         if (isHost) {
             const rm = document.createElement('button');
@@ -547,5 +643,9 @@ function updatePlaylistUI() {
             div.appendChild(rm);
         }
         playlistItems.appendChild(div);
+        if (isHost) {
+            const hf = hostFiles.find(function (f) { return f.name === item.filename && f.size === item.size; });
+            if (hf) scanSubtitlesForFile(hf);
+        }
     });
 }

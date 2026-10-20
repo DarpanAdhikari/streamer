@@ -8,7 +8,7 @@
  * the local file, and broadcast.js mirrors it to viewers via captureStream().
  */
 import {
-  RemuxEngine, planTiers, ffmpegConvert, playableSmokeTest, EngineError,
+  RemuxEngine, planTiers, probeSource, ffmpegConvert, playableSmokeTest, EngineError,
   listEmbeddedSubtitles, extractEmbeddedSubtitle,
 } from './engine.js';
 
@@ -18,6 +18,8 @@ const WTLocal = {
   file: null,
   tier: null,
   info: null,
+  probe: null,
+  embeddedSubtitles: [],
   audioIndex: 0,
   phase: '',
   stream: null,
@@ -49,6 +51,7 @@ const WTLocal = {
 
     const tiers = planTiers(file.name);
     let lastErr = null;
+    let convertedBlob = null;
 
     for (const tier of tiers) {
       if (myGen !== this.gen) return null;
@@ -69,13 +72,16 @@ const WTLocal = {
             onProgress: (p) => { if (myGen === this.gen && hooks.onProgress) hooks.onProgress(p); },
           });
           if (myGen !== this.gen) return null;
+          convertedBlob = res.blob;
           this.objectUrl = URL.createObjectURL(res.blob);
           await this._nativePlay(this.objectUrl);
           this.tier = 3;
           this.info = { mode: res.mode };
         }
         if (myGen !== this.gen) return null;
-        const result = { tier: this.tier, info: this.info, file };
+        await this._probe(file, convertedBlob, myGen);
+        if (myGen !== this.gen) return null;
+        const result = { tier: this.tier, info: this.info, file, probe: this.probe };
         if (hooks.onReady) hooks.onReady(result);
         return result;
       } catch (e) {
@@ -126,6 +132,29 @@ const WTLocal = {
     try { v.removeAttribute('src'); v.load(); } catch (e) { /* ignore */ }
   },
 
+  /* Metadata probe, independent of the tier that ended up playing the file.
+     On tier 3 the converted blob is re-probed so codecs/resolution describe
+     what actually plays, while the audio-track list stays from the source. */
+  async _probe(file, convertedBlob, myGen) {
+    const p = await probeSource(file).catch(() => null);
+    if (myGen !== this.gen) return;
+    this.probe = (p && p.readable) ? p : null;
+    if (!convertedBlob) return;
+    const c = await probeSource(convertedBlob).catch(() => null);
+    if (myGen !== this.gen || !c || !c.readable) return;
+    const base = this.probe || {};
+    this.probe = Object.assign({}, base, {
+      videoCodec: c.videoCodec,
+      audioCodec: c.audioCodec,
+      width: c.width,
+      height: c.height,
+      decodable: c.decodable,
+      duration: c.duration || base.duration || 0,
+      thumb: c.thumb || base.thumb || '',
+      audioTracks: (base.audioTracks && base.audioTracks.length) ? base.audioTracks : (c.audioTracks || []),
+    });
+  },
+
   // Live MediaStream mirrored to viewers over WebRTC (see broadcast.js).
   capture() {
     if (!this.video) return null;
@@ -142,18 +171,46 @@ const WTLocal = {
 
   isReady() { return this.tier != null; },
 
+  /* Audio-track list for the picker. The independent probe is the primary
+     source (it works on every tier); the remux engine's own list is only a
+     fallback for containers the probe could not open. */
   audioTracks() {
-    if (this.tier !== 2 || !this.engine) return [];
-    return this.engine.audioTracks || [];
+    const tracks = this.probe && this.probe.audioTracks;
+    if (tracks && tracks.length) return tracks;
+    if (this.tier === 2 && this.engine) return this.engine.audioTracks || [];
+    return [];
   },
 
-  async listEmbeddedSubtitles() {
-    if (!this.file) return [];
-    try { return await listEmbeddedSubtitles(this.file); } catch (e) { return []; }
+  probeInfo() {
+    return this.probe;
+  },
+
+  embeddedSubtitleCount() {
+    return Array.isArray(this.embeddedSubtitles) ? this.embeddedSubtitles.length : 0;
+  },
+
+  /* Header-only Matroska/WebM track scan. With no argument it scans the
+     currently loaded file and caches the result on `this.embeddedSubtitles`;
+     with a file argument it scans that file and leaves state alone (used to
+     pre-scan other playlist entries). */
+  async listEmbeddedSubtitles(file) {
+    const target = file || this.file;
+    if (!target) {
+      if (!file) this.embeddedSubtitles = [];
+      return [];
+    }
+    try {
+      const subs = await listEmbeddedSubtitles(target);
+      if (!file) this.embeddedSubtitles = subs;
+      return subs;
+    } catch (e) {
+      if (!file) this.embeddedSubtitles = [];
+      return [];
+    }
   },
 
   async extractSubtitle(index) {
-    if (!this.file) return '';
+    if (!this.file) throw new EngineError('subtitle', 'No file is loaded');
     return extractEmbeddedSubtitle(this.file, index);
   },
 
@@ -171,6 +228,8 @@ const WTLocal = {
     }
     this.tier = null;
     this.info = null;
+    this.probe = null;
+    this.embeddedSubtitles = [];
     this.phase = '';
     if (!keepFile) this.file = null;
   },

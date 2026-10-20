@@ -520,6 +520,36 @@ body.room-body {
 }
 .pl-remove:hover { color: var(--red); }
 
+/* Host-local probe data: still frame + "2 audio · 3 subtitles" chips. */
+.playlist-item .pl-thumb {
+    flex: 0 0 auto;
+    width: 56px;
+    height: 32px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.04);
+}
+.playlist-item .pl-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.playlist-item .pl-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.playlist-item .pl-meta {
+    color: var(--muted);
+    font-size: 0.74rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .muted { color: var(--muted); font-size: 0.86rem; }
 
 /* ---------- Chat ---------- */
@@ -735,6 +765,26 @@ body.room-body {
 .settings-mobile-only { display: none; }
 .settings-menu .volume-range { width: 110px; }
 .settings-menu .ctrl-select { max-width: 150px; text-overflow: ellipsis; }
+
+/* Subtitle scan / extraction status, shown under the subtitle row. */
+.sub-status {
+    padding: 2px 10px 6px;
+    font-size: 0.76rem;
+    color: var(--muted);
+    line-height: 1.35;
+}
+.sub-status.busy { color: #c7d2fe; }
+.sub-status.error { color: var(--red); }
+.sub-count {
+    display: inline-block;
+    margin-left: 4px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--muted);
+    font-size: 0.7rem;
+    vertical-align: middle;
+}
 
 /* Slider rows inside the settings menu */
 .settings-slider {

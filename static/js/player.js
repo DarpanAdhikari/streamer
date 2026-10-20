@@ -630,6 +630,24 @@ function updateStats() {
     let engine = isRemoteStream() ? 'mirror' : 'local';
     if (!isRemoteStream() && window.WTLocal && window.WTLocal.tier) engine = 'tier ' + window.WTLocal.tier;
     lines.push('engine  ' + engine);
+    if (!isRemoteStream() && window.WTLocal) {
+        const tracks = (window.WTLocal.audioTracks && window.WTLocal.audioTracks()) || [];
+        if (tracks.length) {
+            const idx = window.WTLocal.audioIndex || 0;
+            const t = tracks[idx] || tracks[0];
+            const label = (typeof audioTrackLabel === 'function')
+                ? audioTrackLabel(t, idx)
+                : ('track ' + (idx + 1));
+            lines.push('audio   ' + label + '  ' + (idx + 1) + '/' + tracks.length);
+        }
+        const subs = (window.WTLocal.embeddedSubtitleCount && window.WTLocal.embeddedSubtitleCount()) || 0;
+        if (subs) lines.push('subs    ' + subs + ' embedded');
+        const probe = window.WTLocal.probeInfo && window.WTLocal.probeInfo();
+        if (probe && probe.videoCodec) {
+            const vc = (typeof shortCodec === 'function') ? shortCodec(probe.videoCodec) : probe.videoCodec;
+            lines.push('video   ' + vc + (probe.width ? ' · ' + probe.width + 'x' + probe.height : ''));
+        }
+    }
     if (player.getVideoPlaybackQuality) {
         const q = player.getVideoPlaybackQuality();
         lines.push('dropped ' + (q.droppedVideoFrames || 0));

@@ -49,19 +49,37 @@ between browsers.
   hold for 2x speed.
 - Automatic picture-in-picture when you switch tabs, and OS media keys through the
   Media Session API.
-- A stats overlay showing resolution, which engine tier is in use, dropped frames,
-  and buffer health.
+- A stats overlay showing resolution and codec, which engine tier is in use, the
+  active audio track, dropped frames, and buffer health.
 - Screenshots that include any picture adjustments you have applied.
 
 **Audio**
 - Pick between embedded audio tracks when a file has more than one.
+- Track detection does not depend on how the file ends up playing: every opened
+  file is scanned, so tracks are listed for direct playback, for the remux tier,
+  and for converted files alike. Each option shows its language or name plus a
+  readable codec (`eng · AC-3`).
+- Switching tracks reloads the file through the lossless remux engine and
+  resumes from the same position, so the change applies to everyone in the room.
 - Files with audio the browser cannot decode (AC3, EAC3, DTS) are converted on the
   fly.
+- The stats overlay (`Y`) reports the active track and codec.
 
 **Subtitles**
 - Use subtitle tracks embedded in the file, or load an external `.srt` or `.vtt`.
+- Embedded tracks are found with a header-only scan of Matroska/WebM files, so
+  listing them costs almost nothing even for very large files. The dropdown shows
+  `ENG · SRT` style labels and a track count.
+- Extracting a track to text uses ffmpeg.wasm in the browser. The first use
+  downloads a roughly 30 MB engine and shows progress in the settings menu.
+  Files over 256 MB cannot be extracted in the browser — export the `.srt` with a
+  desktop player and load it instead. Image-based subtitles (PGS, VobSub) are not
+  supported.
 - Select a video and its subtitle file together and they are matched automatically.
 - Adjust the delay and text size. Subtitle choices are shared with viewers.
+- The playlist shows a thumbnail and `2 audio · 3 subtitles` style chips for each
+  file. Both come from a probe that runs only on the host's computer and is never
+  sent to the server, so viewers see the plain file name.
 
 **Picture**
 - Brightness, contrast, saturation, hue, zoom, rotation, horizontal flip, and

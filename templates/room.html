@@ -99,7 +99,7 @@
                                     </select>
                                 </div>
                                 <div class="settings-item hidden" id="subtitleSettingRow">
-                                    <span>Subtitles</span>
+                                    <span>Subtitles <span id="subtitleCount" class="sub-count hidden"></span></span>
                                     <select id="subtitleTrack" class="ctrl-select" title="Subtitle track">
                                         <option value="">None</option>
                                     </select>
@@ -123,6 +123,7 @@
                                     <button id="loadSubtitleBtn" class="btn icon-btn">Load .srt/.vtt</button>
                                     <input type="file" id="subtitleFileInput" accept=".srt,.vtt,text/plain" hidden>
                                 </div>
+                                <div id="subtitleScanStatus" class="sub-status hidden"></div>
                                 <div class="settings-divider">Picture</div>
                                 <div class="settings-item settings-slider">
                                     <span>Brightness</span>
