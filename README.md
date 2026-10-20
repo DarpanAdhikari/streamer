@@ -56,7 +56,8 @@ between browsers.
   video as a gradient instead of disappearing along with the surrounding page.
   The title strip and page chrome are hidden, the controls come back on any mouse
   or key press, and they fade after three seconds. While an audio call is live, a
-  compact call widget also stays pinned to the top-right of the fullscreen player.
+  floating call button sits in the top-right of the fullscreen player and opens a
+  popover with the participants and call controls.
 
 **Audio**
 - Pick between embedded audio tracks when a file has more than one.
@@ -119,7 +120,7 @@ between browsers.
   person in your own playback, and a small animated meter that lights up while
   someone is talking.
 - In fullscreen the same controls (join/leave, mute, participant list, and the
-  host's end-for-all) appear in a call widget inside the player.
+  host's end-for-all) appear in a popover opened from the floating call button.
 - Needs microphone permission, and a headset avoids echo on laptop speakers. The
   browser asks before you start or join; if the microphone is already blocked, a
   message points you to the browser's site settings.

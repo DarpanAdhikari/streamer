@@ -506,6 +506,7 @@ function setupGestures() {
 
     view.addEventListener('pointerdown', function (e) {
         if (e.target.closest('.control-bar') || e.target.closest('.settings-menu') ||
+            e.target.closest('#fsCallPopover') ||
             e.target.closest('button, a, input, select, textarea')) return;
         pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (pointers.size === 1) {

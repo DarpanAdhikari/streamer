@@ -54,17 +54,25 @@
                         <div id="subtitleOverlay" class="subtitle-overlay"></div>
                         <div id="statsOverlay" class="stats-overlay hidden"></div>
 
-                        <div id="fsCallWidget" class="fs-call-widget hidden">
+                        <button id="fsCallBtn" class="fs-call-btn hidden" type="button"
+                                title="Audio call" aria-label="Audio call" aria-expanded="false">
+                            <span class="fs-call-ico">📞</span>
+                            <span id="fsCallBadge" class="fs-call-badge hidden">0</span>
+                            <span class="fs-call-ring" aria-hidden="true"></span>
+                        </button>
+
+                        <div id="fsCallPopover" class="fs-call-popover hidden" role="dialog" aria-label="Audio call">
                             <div class="fs-call-head">
                                 <span id="fsCallStatus" class="fs-call-status">Audio call</span>
-                                <span id="fsCallTimer" class="fs-call-timer muted"></span>
-                                <button id="fsCallJoinBtn" class="btn btn-primary fs-call-join" type="button">Join</button>
+                                <span id="fsCallTimer" class="fs-call-timer">00:00</span>
+                                <button id="fsCallClose" class="fs-call-close" type="button" title="Close" aria-label="Close">×</button>
                             </div>
+                            <button id="fsCallJoinBtn" class="btn btn-primary fs-call-join" type="button">Join</button>
                             <div id="fsCallParticipants" class="call-participants fs-call-participants" aria-live="polite"></div>
                             <div id="fsCallActions" class="fs-call-actions" style="display:none;">
                                 <button id="fsCallMuteBtn" class="btn" type="button">Mute</button>
                                 <button id="fsCallLeaveBtn" class="btn" type="button">Leave</button>
-                                <button id="fsCallEndBtn" class="btn" type="button" style="display:none;">End for all</button>
+                                <button id="fsCallEndBtn" class="btn btn-danger" type="button" style="display:none;">End for all</button>
                             </div>
                         </div>
                     </div>

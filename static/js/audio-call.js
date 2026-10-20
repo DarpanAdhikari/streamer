@@ -151,13 +151,38 @@ function acRenderParticipants() {
     acRefreshTalking();
 }
 
+function acFsPopoverOpen() {
+    const pop = document.getElementById('fsCallPopover');
+    return !!(pop && !pop.classList.contains('hidden'));
+}
+
+function acSetFsPopover(open) {
+    const pop = document.getElementById('fsCallPopover');
+    const btn = document.getElementById('fsCallBtn');
+    if (pop) pop.classList.toggle('hidden', !open);
+    if (btn) {
+        btn.classList.toggle('open', !!open);
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+}
+
+function acToggleFsPopover() { acSetFsPopover(!acFsPopoverOpen()); }
+
 function acUpdateFsWidget() {
-    const widget = document.getElementById('fsCallWidget');
-    if (!widget) return;
+    const btn = document.getElementById('fsCallBtn');
+    if (!btn) return;
     // Visible in fullscreen whenever a call exists (or I'm in one).
     const show = acInCall || acState.active;
-    widget.classList.toggle('hidden', !show);
-    if (!show) return;
+    btn.classList.toggle('hidden', !show);
+    btn.classList.toggle('in-call', acInCall);
+    if (!show) { acSetFsPopover(false); return; }
+
+    const badge = document.getElementById('fsCallBadge');
+    if (badge) {
+        const n = acState.participants.length;
+        badge.textContent = String(n);
+        badge.classList.toggle('hidden', n === 0);
+    }
 
     const status = document.getElementById('fsCallStatus');
     if (status) status.textContent = acInCall ? 'Audio call' : 'Audio call in progress';
@@ -651,6 +676,16 @@ function initAudioCall() {
     if (end) end.addEventListener('click', acEndForAll);
 
     // Fullscreen call widget mirrors the topbar/panel controls.
+    const fsBtn = document.getElementById('fsCallBtn');
+    if (fsBtn) {
+        fsBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        fsBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            acToggleFsPopover();
+        });
+    }
+    const fsClose = document.getElementById('fsCallClose');
+    if (fsClose) fsClose.addEventListener('click', function () { acSetFsPopover(false); });
     const fsJoin = document.getElementById('fsCallJoinBtn');
     if (fsJoin) fsJoin.addEventListener('click', acOnCallButton);
     const fsMute = document.getElementById('fsCallMuteBtn');
@@ -659,6 +694,21 @@ function initAudioCall() {
     if (fsLeave) fsLeave.addEventListener('click', acLeave);
     const fsEnd = document.getElementById('fsCallEndBtn');
     if (fsEnd) fsEnd.addEventListener('click', acEndForAll);
+
+    // Dismiss the popover on an outside click or Escape.
+    document.addEventListener('pointerdown', function (e) {
+        if (!acFsPopoverOpen()) return;
+        const pop = document.getElementById('fsCallPopover');
+        const btn = document.getElementById('fsCallBtn');
+        if (pop && !pop.contains(e.target) && btn && !btn.contains(e.target)) acSetFsPopover(false);
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && acFsPopoverOpen()) {
+            e.preventDefault();
+            e.stopPropagation();
+            acSetFsPopover(false);
+        }
+    }, true);
     document.addEventListener('pointerdown', function () {
         if (acAudioCtx && acAudioCtx.state === 'suspended') acAudioCtx.resume().catch(function () {});
     });
